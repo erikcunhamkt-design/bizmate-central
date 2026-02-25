@@ -11,7 +11,7 @@ import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useSearchParams } from "react-router-dom";
-import { CheckCircle, Plus, Trash2 } from "lucide-react";
+import { CheckCircle, Plus, Trash2, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,7 @@ export default function Vendas() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [addProductId, setAddProductId] = useState("");
   const [manualTotal, setManualTotal] = useState("");
+  const [editingInstallment, setEditingInstallment] = useState<{ id: string; valor: string } | null>(null);
 
   const { data: sales = [], isLoading: salesLoading } = useQuery({
     queryKey: ["sales", user?.id],
@@ -111,6 +112,29 @@ export default function Vendas() {
       queryClient.invalidateQueries({ queryKey: ["installments"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       toast({ title: "Parcela marcada como paga!" });
+    },
+  });
+
+  const deleteInstallment = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("installments").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
+      toast({ title: "Parcela excluída!" });
+    },
+  });
+
+  const updateInstallmentValue = useMutation({
+    mutationFn: async ({ id, valor }: { id: string; valor: number }) => {
+      const { error } = await supabase.from("installments").update({ valor_parcela: valor }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
+      setEditingInstallment(null);
+      toast({ title: "Valor da parcela atualizado!" });
     },
   });
 
@@ -314,17 +338,47 @@ export default function Vendas() {
                       <TableCell>{format(new Date(i.vencimento_data), "dd/MM/yyyy")}</TableCell>
                       <TableCell className="font-medium">{(i as any).customers?.nome ?? "—"}</TableCell>
                       <TableCell>{i.numero_parcela}/{i.total_parcelas}</TableCell>
-                      <TableCell>{formatBRL(i.valor_parcela)}</TableCell>
+                      <TableCell>
+                        {editingInstallment?.id === i.id ? (
+                          <div className="flex gap-1 items-center">
+                            <Input
+                              type="number"
+                              min={0.01}
+                              step="0.01"
+                              value={editingInstallment.valor}
+                              onChange={e => setEditingInstallment({ ...editingInstallment, valor: e.target.value })}
+                              className="h-7 w-24"
+                            />
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-success" onClick={() => {
+                              const v = parseFloat(editingInstallment.valor);
+                              if (v > 0) updateInstallmentValue.mutate({ id: i.id, valor: v });
+                            }}>
+                              <CheckCircle className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : formatBRL(i.valor_parcela)}
+                      </TableCell>
                       <TableCell><StatusBadge status={i.status} vencimento={i.vencimento_data} /></TableCell>
                       <TableCell>
-                        {i.status === "pendente" && (
-                          <Button size="sm" variant="ghost" className="gap-1 text-success" onClick={() => markPaid.mutate(i.id)} disabled={markPaid.isPending}>
-                            <CheckCircle className="h-4 w-4" />Pagar
+                        <div className="flex gap-1">
+                          {i.status === "pendente" && (
+                            <>
+                              <Button size="sm" variant="ghost" className="gap-1 text-success" onClick={() => markPaid.mutate(i.id)} disabled={markPaid.isPending}>
+                                <CheckCircle className="h-4 w-4" />Pagar
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditingInstallment({ id: i.id, valor: String(i.valor_parcela) })}>
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            </>
+                          )}
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => deleteInstallment.mutate(i.id)} disabled={deleteInstallment.isPending}>
+                            <Trash2 className="h-3 w-3" />
                           </Button>
-                        )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
+
                 </TableBody>
               </Table>
             </CardContent>
