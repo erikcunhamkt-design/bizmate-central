@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { startOfMonth, endOfMonth, format, isToday, isBefore, startOfDay } from "date-fns";
+import { startOfMonth, endOfMonth, format, addDays } from "date-fns";
 
 export function useDashboardData() {
   const { user } = useAuth();
@@ -9,6 +9,7 @@ export function useDashboardData() {
   const mesInicio = format(startOfMonth(now), "yyyy-MM-dd");
   const mesFim = format(endOfMonth(now), "yyyy-MM-dd");
   const hoje = format(now, "yyyy-MM-dd");
+  const em7dias = format(addDays(now, 7), "yyyy-MM-dd");
 
   const installments = useQuery({
     queryKey: ["dashboard-installments", user?.id, mesInicio],
@@ -18,6 +19,39 @@ export function useDashboardData() {
         .select("*, customers(nome)")
         .gte("vencimento_data", mesInicio)
         .lte("vencimento_data", mesFim);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user,
+  });
+
+  // Overdue installments (before today, still pending)
+  const overdueQuery = useQuery({
+    queryKey: ["dashboard-overdue", user?.id, hoje],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("installments")
+        .select("*, customers(nome)")
+        .eq("status", "pendente")
+        .lt("vencimento_data", hoje)
+        .order("vencimento_data");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user,
+  });
+
+  // Upcoming installments (today + next 7 days, pending)
+  const upcomingQuery = useQuery({
+    queryKey: ["dashboard-upcoming", user?.id, hoje],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("installments")
+        .select("*, customers(nome)")
+        .eq("status", "pendente")
+        .gte("vencimento_data", hoje)
+        .lte("vencimento_data", em7dias)
+        .order("vencimento_data");
       if (error) throw error;
       return data ?? [];
     },
@@ -88,6 +122,22 @@ export function useDashboardData() {
       status: e.status,
     }));
 
+  const overdueItems = (overdueQuery.data ?? []).map(i => ({
+    id: i.id,
+    cliente: (i as any).customers?.nome ?? "Cliente",
+    parcela: `${i.numero_parcela}/${i.total_parcelas}`,
+    valor: i.valor_parcela,
+    vencimento: i.vencimento_data,
+  }));
+
+  const upcomingItems = (upcomingQuery.data ?? []).map(i => ({
+    id: i.id,
+    cliente: (i as any).customers?.nome ?? "Cliente",
+    parcela: `${i.numero_parcela}/${i.total_parcelas}`,
+    valor: i.valor_parcela,
+    vencimento: i.vencimento_data,
+  }));
+
   return {
     loading: installments.isLoading || expenses.isLoading || cashMovements.isLoading,
     entradas,
@@ -97,5 +147,7 @@ export function useDashboardData() {
     aPagar,
     venceHojeCount: venceHoje.length,
     todayItems: [...todayInstallments, ...todayExpenses],
+    overdueItems,
+    upcomingItems,
   };
 }

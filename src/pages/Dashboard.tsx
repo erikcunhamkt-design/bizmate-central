@@ -4,6 +4,7 @@ import { useDashboardData } from "@/hooks/useDashboardData";
 import { formatBRL } from "@/lib/currency";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Link } from "react-router-dom";
+import { format } from "date-fns";
 import {
   TrendingUp,
   TrendingDown,
@@ -18,7 +19,7 @@ import {
 } from "lucide-react";
 
 export default function Dashboard() {
-  const { loading, entradas, saidas, lucro, aReceber, aPagar, venceHojeCount, todayItems } =
+  const { loading, entradas, saidas, lucro, aReceber, aPagar, venceHojeCount, todayItems, overdueItems, upcomingItems } =
     useDashboardData();
 
   const kpis = [
@@ -81,6 +82,62 @@ export default function Dashboard() {
             </Link>
           </Button>
         ))}
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Clientes Atrasados */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              Clientes Atrasados
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {overdueItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum cliente atrasado 🎉</p>
+            ) : (
+              <div className="space-y-3">
+                {overdueItems.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.cliente}</p>
+                      <p className="text-xs text-muted-foreground">Parcela {item.parcela} • Venceu {format(new Date(item.vencimento), "dd/MM/yyyy")}</p>
+                    </div>
+                    <span className="text-sm font-semibold text-destructive">{formatBRL(item.valor)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Próximos 7 dias */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-warning" />
+              Vencimentos Próximos 7 Dias
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {upcomingItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum vencimento nos próximos 7 dias 🎉</p>
+            ) : (
+              <div className="space-y-3">
+                {upcomingItems.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.cliente}</p>
+                      <p className="text-xs text-muted-foreground">Parcela {item.parcela} • Vence {format(new Date(item.vencimento), "dd/MM/yyyy")}</p>
+                    </div>
+                    <span className="text-sm font-semibold">{formatBRL(item.valor)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Today's Items */}
