@@ -37,7 +37,8 @@ export default function Vendas() {
   // Nova venda state
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [formaPagamento, setFormaPagamento] = useState("pix");
-  const [numParcelas, setNumParcelas] = useState(1);
+  const [parcelado, setParcelado] = useState(false);
+  const [valorPorParcela, setValorPorParcela] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [addProductId, setAddProductId] = useState("");
   const [manualTotal, setManualTotal] = useState("");
@@ -127,7 +128,7 @@ export default function Vendas() {
         total_venda: total,
         forma_pagamento: formaPagamento,
         data_compra: today,
-        status: formaPagamento === "pix" || formaPagamento === "dinheiro" ? "pago" : "ativa",
+        status: !parcelado ? "pago" : "ativa",
       }).select().single();
       if (saleErr) throw saleErr;
 
@@ -154,18 +155,22 @@ export default function Vendas() {
       }
 
       // 4. Create installments if parcelado, or cash movement if à vista
-      if (formaPagamento === "parcelado" && numParcelas > 1) {
-        const valorParcela = Math.round((total / numParcelas) * 100) / 100;
+      if (parcelado && valorPorParcela) {
+        const vparcela = parseFloat(valorPorParcela);
+        if (vparcela <= 0) throw new Error("Valor por parcela inválido");
+        const numParcelas = Math.ceil(total / vparcela);
         const parcelas = Array.from({ length: numParcelas }, (_, i) => {
           const venc = new Date();
           venc.setMonth(venc.getMonth() + i + 1);
+          const isLast = i === numParcelas - 1;
+          const valor = isLast ? Math.round((total - vparcela * (numParcelas - 1)) * 100) / 100 : vparcela;
           return {
             user_id: user!.id,
             customer_id: selectedCustomer,
             sale_id: sale.id,
             numero_parcela: i + 1,
             total_parcelas: numParcelas,
-            valor_parcela: valorParcela,
+            valor_parcela: valor,
             vencimento_data: format(venc, "yyyy-MM-dd"),
             status: "pendente",
           };
@@ -200,7 +205,8 @@ export default function Vendas() {
     setOpenNova(false);
     setSelectedCustomer("");
     setFormaPagamento("pix");
-    setNumParcelas(1);
+    setParcelado(false);
+    setValorPorParcela("");
     setCart([]);
     setAddProductId("");
     setManualTotal("");
@@ -411,22 +417,32 @@ export default function Vendas() {
             {/* Forma de Pagamento */}
             <div className="space-y-1">
               <Label>Forma de Pagamento</Label>
-              <Select value={formaPagamento} onValueChange={(v) => { setFormaPagamento(v); if (v !== "parcelado") setNumParcelas(1); }}>
+              <Select value={formaPagamento} onValueChange={setFormaPagamento}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pix">PIX</SelectItem>
                   <SelectItem value="dinheiro">Dinheiro</SelectItem>
                   <SelectItem value="cartao">Cartão</SelectItem>
-                  <SelectItem value="parcelado">Parcelado</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {formaPagamento === "parcelado" && (
+            {/* Parcelado */}
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="parcelado" checked={parcelado} onChange={e => setParcelado(e.target.checked)} className="rounded" />
+              <Label htmlFor="parcelado">Parcelado?</Label>
+            </div>
+
+            {parcelado && (
               <div className="space-y-1">
-                <Label>Número de Parcelas</Label>
-                <Input type="number" min={2} max={24} value={numParcelas} onChange={e => setNumParcelas(parseInt(e.target.value) || 2)} />
-                {numParcelas > 1 && <p className="text-xs text-muted-foreground">{numParcelas}x de {formatBRL(totalCart / numParcelas)}</p>}
+                <Label>Valor por Parcela (R$)</Label>
+                <Input type="number" min={1} step="0.01" placeholder="Ex: 150.00" value={valorPorParcela} onChange={e => setValorPorParcela(e.target.value)} />
+                {parseFloat(valorPorParcela) > 0 && totalCart > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {Math.ceil(totalCart / parseFloat(valorPorParcela))}x de {formatBRL(parseFloat(valorPorParcela))}
+                  </p>
+                )}
               </div>
             )}
 
