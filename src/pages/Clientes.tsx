@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { UserPlus, Search, Phone } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { formatBRL } from "@/lib/currency";
+import { CustomerDetail } from "@/components/CustomerDetail";
 
 export default function Clientes() {
   const { user } = useAuth();
@@ -26,7 +27,7 @@ export default function Clientes() {
   const [whatsapp, setWhatsapp] = useState("");
   const [email, setEmail] = useState("");
   const [obs, setObs] = useState("");
-
+  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; nome: string } | null>(null);
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ["customers", user?.id],
     queryFn: async () => {
@@ -109,11 +110,11 @@ export default function Clientes() {
               ) : filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>
               ) : filtered.map(c => (
-                <TableRow key={c.id}>
+                <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedCustomer({ id: c.id, nome: c.nome })}>
                   <TableCell className="font-medium">{c.nome}</TableCell>
                   <TableCell>
                     {c.whatsapp ? (
-                      <a href={`https://wa.me/${c.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noopener" className="flex items-center gap-1 text-primary hover:underline">
+                      <a href={`https://wa.me/${c.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noopener" className="flex items-center gap-1 text-primary hover:underline" onClick={e => e.stopPropagation()}>
                         <Phone className="h-3 w-3" />{c.whatsapp}
                       </a>
                     ) : "—"}
@@ -130,6 +131,13 @@ export default function Clientes() {
           </Table>
         </CardContent>
       </Card>
+      {selectedCustomer && (
+        <CustomerDetail
+          customerId={selectedCustomer.id}
+          customerName={selectedCustomer.nome}
+          onClose={() => setSelectedCustomer(null)}
+        />
+      )}
     </div>
   );
 }
