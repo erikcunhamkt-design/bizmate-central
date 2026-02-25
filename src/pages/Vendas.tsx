@@ -40,6 +40,7 @@ export default function Vendas() {
   const [numParcelas, setNumParcelas] = useState(1);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [addProductId, setAddProductId] = useState("");
+  const [manualTotal, setManualTotal] = useState("");
 
   const { data: sales = [], isLoading: salesLoading } = useQuery({
     queryKey: ["sales", user?.id],
@@ -114,8 +115,9 @@ export default function Vendas() {
 
   const createSale = useMutation({
     mutationFn: async () => {
-      if (!selectedCustomer || cart.length === 0) throw new Error("Dados incompletos");
-      const total = cart.reduce((s, c) => s + c.preco * c.quantidade, 0);
+      if (!selectedCustomer) throw new Error("Selecione um cliente");
+      const total = cart.length > 0 ? cart.reduce((s, c) => s + c.preco * c.quantidade, 0) : parseFloat(manualTotal) || 0;
+      if (total <= 0) throw new Error("Informe o valor da venda");
       const today = format(new Date(), "yyyy-MM-dd");
 
       // 1. Create sale
@@ -129,24 +131,26 @@ export default function Vendas() {
       }).select().single();
       if (saleErr) throw saleErr;
 
-      // 2. Create sale_items
-      const items = cart.map(c => ({
-        sale_id: sale.id,
-        product_id: c.product_id,
-        quantidade: c.quantidade,
-        preco_unitario_vendido: c.preco,
-        custo_unitario_no_momento: c.custo,
-        subtotal: c.preco * c.quantidade,
-      }));
-      const { error: itemsErr } = await supabase.from("sale_items").insert(items);
-      if (itemsErr) throw itemsErr;
+      // 2. Create sale_items (if any)
+      if (cart.length > 0) {
+        const items = cart.map(c => ({
+          sale_id: sale.id,
+          product_id: c.product_id,
+          quantidade: c.quantidade,
+          preco_unitario_vendido: c.preco,
+          custo_unitario_no_momento: c.custo,
+          subtotal: c.preco * c.quantidade,
+        }));
+        const { error: itemsErr } = await supabase.from("sale_items").insert(items);
+        if (itemsErr) throw itemsErr;
 
-      // 3. Decrement stock for each product
-      for (const c of cart) {
-        const { error: stockErr } = await supabase.from("products").update({
-          estoque_atual: c.estoque_atual - c.quantidade,
-        }).eq("id", c.product_id);
-        if (stockErr) throw stockErr;
+        // 3. Decrement stock for each product
+        for (const c of cart) {
+          const { error: stockErr } = await supabase.from("products").update({
+            estoque_atual: c.estoque_atual - c.quantidade,
+          }).eq("id", c.product_id);
+          if (stockErr) throw stockErr;
+        }
       }
 
       // 4. Create installments if parcelado, or cash movement if à vista
@@ -199,6 +203,7 @@ export default function Vendas() {
     setNumParcelas(1);
     setCart([]);
     setAddProductId("");
+    setManualTotal("");
   };
 
   const addToCart = (productId: string) => {
@@ -231,7 +236,7 @@ export default function Vendas() {
     setCart(prev => prev.filter(c => c.product_id !== productId));
   };
 
-  const totalCart = cart.reduce((s, c) => s + c.preco * c.quantidade, 0);
+  const totalCart = cart.length > 0 ? cart.reduce((s, c) => s + c.preco * c.quantidade, 0) : parseFloat(manualTotal) || 0;
 
   return (
     <div className="space-y-6">
@@ -395,6 +400,14 @@ export default function Vendas() {
               </div>
             )}
 
+            {/* Valor manual quando sem produtos */}
+            {cart.length === 0 && (
+              <div className="space-y-1">
+                <Label>Valor da Venda (R$)</Label>
+                <Input type="number" min={0} step="0.01" placeholder="0,00" value={manualTotal} onChange={e => setManualTotal(e.target.value)} />
+              </div>
+            )}
+
             {/* Forma de Pagamento */}
             <div className="space-y-1">
               <Label>Forma de Pagamento</Label>
@@ -417,7 +430,7 @@ export default function Vendas() {
               </div>
             )}
 
-            <Button className="w-full" onClick={() => createSale.mutate()} disabled={createSale.isPending || !selectedCustomer || cart.length === 0}>
+            <Button className="w-full" onClick={() => createSale.mutate()} disabled={createSale.isPending || !selectedCustomer}>
               {createSale.isPending ? "Registrando..." : "Registrar Venda"}
             </Button>
           </div>
