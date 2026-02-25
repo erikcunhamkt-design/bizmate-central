@@ -39,10 +39,11 @@ export default function Vendas() {
   const [formaPagamento, setFormaPagamento] = useState("pix");
   const [parcelado, setParcelado] = useState(false);
   const [valorPorParcela, setValorPorParcela] = useState("");
+  const [diaPagamento, setDiaPagamento] = useState(""); 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [addProductId, setAddProductId] = useState("");
   const [manualTotal, setManualTotal] = useState("");
-  const [editingInstallment, setEditingInstallment] = useState<{ id: string; valor: string } | null>(null);
+  const [editingInstallment, setEditingInstallment] = useState<{ id: string; valor: string; vencimento: string } | null>(null);
 
   const { data: sales = [], isLoading: salesLoading } = useQuery({
     queryKey: ["sales", user?.id],
@@ -127,14 +128,15 @@ export default function Vendas() {
   });
 
   const updateInstallmentValue = useMutation({
-    mutationFn: async ({ id, valor }: { id: string; valor: number }) => {
-      const { error } = await supabase.from("installments").update({ valor_parcela: valor }).eq("id", id);
+    mutationFn: async ({ id, valor, vencimento }: { id: string; valor: number; vencimento: string }) => {
+      const { error } = await supabase.from("installments").update({ valor_parcela: valor, vencimento_data: vencimento }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["installments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       setEditingInstallment(null);
-      toast({ title: "Valor da parcela atualizado!" });
+      toast({ title: "Parcela atualizada!" });
     },
   });
 
@@ -183,9 +185,11 @@ export default function Vendas() {
         const vparcela = parseFloat(valorPorParcela);
         if (vparcela <= 0) throw new Error("Valor por parcela inválido");
         const numParcelas = Math.ceil(total / vparcela);
+        const dia = parseInt(diaPagamento) || new Date().getDate();
         const parcelas = Array.from({ length: numParcelas }, (_, i) => {
           const venc = new Date();
           venc.setMonth(venc.getMonth() + i + 1);
+          venc.setDate(Math.min(dia, new Date(venc.getFullYear(), venc.getMonth() + 1, 0).getDate()));
           const isLast = i === numParcelas - 1;
           const valor = isLast ? Math.round((total - vparcela * (numParcelas - 1)) * 100) / 100 : vparcela;
           return {
@@ -231,6 +235,7 @@ export default function Vendas() {
     setFormaPagamento("pix");
     setParcelado(false);
     setValorPorParcela("");
+    setDiaPagamento("");
     setCart([]);
     setAddProductId("");
     setManualTotal("");
@@ -335,7 +340,16 @@ export default function Vendas() {
                     <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Nenhuma parcela registrada</TableCell></TableRow>
                   ) : installments.map(i => (
                     <TableRow key={i.id}>
-                      <TableCell>{format(new Date(i.vencimento_data), "dd/MM/yyyy")}</TableCell>
+                      <TableCell>
+                        {editingInstallment?.id === i.id ? (
+                          <Input
+                            type="date"
+                            value={editingInstallment.vencimento}
+                            onChange={e => setEditingInstallment({ ...editingInstallment, vencimento: e.target.value })}
+                            className="h-7 w-36"
+                          />
+                        ) : format(new Date(i.vencimento_data), "dd/MM/yyyy")}
+                      </TableCell>
                       <TableCell className="font-medium">{(i as any).customers?.nome ?? "—"}</TableCell>
                       <TableCell>{i.numero_parcela}/{i.total_parcelas}</TableCell>
                       <TableCell>
@@ -351,7 +365,7 @@ export default function Vendas() {
                             />
                             <Button size="sm" variant="ghost" className="h-7 px-2 text-success" onClick={() => {
                               const v = parseFloat(editingInstallment.valor);
-                              if (v > 0) updateInstallmentValue.mutate({ id: i.id, valor: v });
+                              if (v > 0) updateInstallmentValue.mutate({ id: i.id, valor: v, vencimento: editingInstallment.vencimento });
                             }}>
                               <CheckCircle className="h-3 w-3" />
                             </Button>
@@ -366,7 +380,7 @@ export default function Vendas() {
                               <Button size="sm" variant="ghost" className="gap-1 text-success" onClick={() => markPaid.mutate(i.id)} disabled={markPaid.isPending}>
                                 <CheckCircle className="h-4 w-4" />Pagar
                               </Button>
-                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditingInstallment({ id: i.id, valor: String(i.valor_parcela) })}>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditingInstallment({ id: i.id, valor: String(i.valor_parcela), vencimento: i.vencimento_data })}>
                                 <Pencil className="h-3 w-3" />
                               </Button>
                             </>
@@ -489,14 +503,20 @@ export default function Vendas() {
             </div>
 
             {parcelado && (
-              <div className="space-y-1">
-                <Label>Valor por Parcela (R$)</Label>
-                <Input type="number" min={1} step="0.01" placeholder="Ex: 150.00" value={valorPorParcela} onChange={e => setValorPorParcela(e.target.value)} />
-                {parseFloat(valorPorParcela) > 0 && totalCart > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {Math.ceil(totalCart / parseFloat(valorPorParcela))}x de {formatBRL(parseFloat(valorPorParcela))}
-                  </p>
-                )}
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label>Valor por Parcela (R$)</Label>
+                  <Input type="number" min={1} step="0.01" placeholder="Ex: 150.00" value={valorPorParcela} onChange={e => setValorPorParcela(e.target.value)} />
+                  {parseFloat(valorPorParcela) > 0 && totalCart > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {Math.ceil(totalCart / parseFloat(valorPorParcela))}x de {formatBRL(parseFloat(valorPorParcela))}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <Label>Dia de Pagamento (do mês)</Label>
+                  <Input type="number" min={1} max={31} placeholder="Ex: 10" value={diaPagamento} onChange={e => setDiaPagamento(e.target.value)} />
+                </div>
               </div>
             )}
 
