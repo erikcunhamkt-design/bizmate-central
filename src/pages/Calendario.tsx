@@ -140,8 +140,9 @@ export default function Calendario() {
                   {format(day, "d")}
                   {dayEvents.length > 0 && (
                     <div className="flex justify-center gap-0.5 mt-1">
-                      {dayEvents.some(e => e.tipo === "parcela") && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                      {dayEvents.some(e => e.tipo === "conta") && <div className="w-1.5 h-1.5 rounded-full bg-warning" />}
+                      {dayEvents.some(e => e.tipo === "parcela" && e.status === "pendente" && new Date(e.date) < new Date()) && <div className="w-1.5 h-1.5 rounded-full bg-destructive" />}
+                      {dayEvents.some(e => e.tipo === "parcela" && !(new Date(e.date) < new Date() && e.status === "pendente")) && <div className="w-1.5 h-1.5 rounded-full bg-success" />}
+                      {dayEvents.some(e => e.tipo === "conta") && <div className="w-1.5 h-1.5 rounded-full bg-destructive" />}
                     </div>
                   )}
                 </button>
