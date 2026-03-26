@@ -168,9 +168,21 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
               </div>
             </DialogTitle>
             {!editing && (
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={startEdit}>
-                <Pencil className="h-3.5 w-3.5" /> Editar
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`gap-1.5 ${customer?.status === "ativo" ? "text-success" : "text-muted-foreground"}`}
+                  onClick={() => toggleStatusMutation.mutate()}
+                  disabled={toggleStatusMutation.isPending}
+                >
+                  {customer?.status === "ativo" ? <UserCheck className="h-3.5 w-3.5" /> : <UserX className="h-3.5 w-3.5" />}
+                  {customer?.status === "ativo" ? "Ativo" : "Inativo"}
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={startEdit}>
+                  <Pencil className="h-3.5 w-3.5" /> Editar
+                </Button>
+              </div>
             )}
           </div>
         </DialogHeader>
