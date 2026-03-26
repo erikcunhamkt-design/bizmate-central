@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/lib/currency";
 import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2 } from "lucide-react";
@@ -21,6 +22,8 @@ export default function Estoque() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("todos");
+  const [stockFilter, setStockFilter] = useState("todos");
   const [form, setForm] = useState(emptyForm);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -83,7 +86,18 @@ export default function Estoque() {
     onError: () => toast({ title: "Erro ao excluir produto. Verifique se não há vendas vinculadas.", variant: "destructive" }),
   });
 
-  const filtered = products.filter(p => p.nome.toLowerCase().includes(search.toLowerCase()) || p.categoria?.toLowerCase().includes(search.toLowerCase()));
+  const categories = [...new Set(products.map(p => p.categoria).filter(Boolean))] as string[];
+
+  const filtered = products.filter(p => {
+    const matchSearch = p.nome.toLowerCase().includes(search.toLowerCase()) || p.categoria?.toLowerCase().includes(search.toLowerCase());
+    const matchCategory = categoryFilter === "todos" || p.categoria === categoryFilter;
+    const matchStock = stockFilter === "todos" ? true :
+      stockFilter === "baixo" ? p.estoque_atual <= p.alerta_estoque_minimo :
+      stockFilter === "zerado" ? p.estoque_atual === 0 :
+      p.estoque_atual > p.alerta_estoque_minimo;
+    return matchSearch && matchCategory && matchStock;
+  });
+
   const calcMargem = (custo: number, preco: number) => preco === 0 ? 0 : ((preco - custo) / preco * 100);
   const lowStockCount = products.filter(p => p.estoque_atual <= p.alerta_estoque_minimo).length;
 
@@ -143,9 +157,30 @@ export default function Estoque() {
         </Dialog>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar produtos ou categorias..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-10 bg-card border-border/50" />
+      {/* Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Buscar produtos ou categorias..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-10 bg-card border-border/50" />
+        </div>
+        {categories.length > 0 && (
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-40 h-10 bg-card border-border/50"><SelectValue placeholder="Categoria" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todas categorias</SelectItem>
+              {categories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+        <Select value={stockFilter} onValueChange={setStockFilter}>
+          <SelectTrigger className="w-36 h-10 bg-card border-border/50"><SelectValue placeholder="Estoque" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todo estoque</SelectItem>
+            <SelectItem value="normal">Normal</SelectItem>
+            <SelectItem value="baixo">Estoque baixo</SelectItem>
+            <SelectItem value="zerado">Zerado</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Card className="border-border/50 overflow-hidden">
@@ -212,7 +247,6 @@ export default function Estoque() {
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={(v) => { if (!v) setEditingProduct(null); }}>
         <DialogContent>
           <DialogHeader>
@@ -229,7 +263,6 @@ export default function Estoque() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm Dialog */}
       <Dialog open={!!deleteConfirm} onOpenChange={(v) => { if (!v) setDeleteConfirm(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Excluir Produto</DialogTitle></DialogHeader>
