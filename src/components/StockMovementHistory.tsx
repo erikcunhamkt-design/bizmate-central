@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/PaginationControls";
+import { StockEvolutionChart } from "@/components/StockEvolutionChart";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowUpCircle, ArrowDownCircle, RefreshCw, Plus, Search, Package as PackageIcon } from "lucide-react";
@@ -127,6 +128,9 @@ export function StockMovementHistory({ products }: StockMovementHistoryProps) {
 
   return (
     <div className="space-y-4">
+      {/* Stock Evolution Chart */}
+      <StockEvolutionChart movements={movements} />
+
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
