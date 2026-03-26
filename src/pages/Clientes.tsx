@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { UserPlus, Search, Mail, MessageCircle, Eye, Trash2, Users, SortAsc, SortDesc } from "lucide-react";
+import { UserPlus, Search, Mail, MessageCircle, Eye, Trash2, Users, SortAsc, SortDesc, UserCheck, UserX } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { CustomerDetail } from "@/components/CustomerDetail";
 import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
@@ -79,6 +79,18 @@ export default function Clientes() {
       setDeleteConfirm(null);
     },
     onError: () => toast({ title: "Erro ao excluir. Verifique vendas vinculadas.", variant: "destructive" }),
+  });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({ id, newStatus }: { id: string; newStatus: string }) => {
+      const { error } = await supabase.from("customers").update({ status: newStatus }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      toast({ title: "Status atualizado!" });
+    },
+    onError: () => toast({ title: "Erro ao atualizar status", variant: "destructive" }),
   });
 
   const filtered = customers
@@ -211,9 +223,22 @@ export default function Clientes() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={c.status === "ativo" ? "default" : "secondary"} className={c.status === "ativo" ? "bg-success/10 text-success border-success/20" : ""}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={`gap-1.5 text-xs font-semibold px-2.5 py-1 h-7 rounded-full ${
+                        c.status === "ativo"
+                          ? "bg-success/10 text-success hover:bg-success/20"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleStatusMutation.mutate({ id: c.id, newStatus: c.status === "ativo" ? "inativo" : "ativo" });
+                      }}
+                    >
+                      {c.status === "ativo" ? <UserCheck className="h-3 w-3" /> : <UserX className="h-3 w-3" />}
                       {c.status}
-                    </Badge>
+                    </Button>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

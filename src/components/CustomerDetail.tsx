@@ -15,7 +15,7 @@ import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
 import { useToast } from "@/hooks/use-toast";
 import {
   ShoppingCart, CheckCircle, AlertTriangle, Package, MapPin, User,
-  Clock, CalendarDays, Pencil, X, Save
+  Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX
 } from "lucide-react";
 
 interface CustomerDetailProps {
@@ -80,6 +80,21 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
       setEditing(false);
     },
     onError: () => toast({ title: "Erro ao atualizar", variant: "destructive" }),
+  });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: async () => {
+      if (!customer) return;
+      const newStatus = customer.status === "ativo" ? "inativo" : "ativo";
+      const { error } = await supabase.from("customers").update({ status: newStatus }).eq("id", customerId!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customer-detail", customerId] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      toast({ title: `Cliente ${customer?.status === "ativo" ? "desativado" : "ativado"}!` });
+    },
+    onError: () => toast({ title: "Erro ao alterar status", variant: "destructive" }),
   });
 
   const startEdit = () => {
@@ -153,9 +168,21 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
               </div>
             </DialogTitle>
             {!editing && (
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={startEdit}>
-                <Pencil className="h-3.5 w-3.5" /> Editar
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`gap-1.5 ${customer?.status === "ativo" ? "text-success" : "text-muted-foreground"}`}
+                  onClick={() => toggleStatusMutation.mutate()}
+                  disabled={toggleStatusMutation.isPending}
+                >
+                  {customer?.status === "ativo" ? <UserCheck className="h-3.5 w-3.5" /> : <UserX className="h-3.5 w-3.5" />}
+                  {customer?.status === "ativo" ? "Ativo" : "Inativo"}
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={startEdit}>
+                  <Pencil className="h-3.5 w-3.5" /> Editar
+                </Button>
+              </div>
             )}
           </div>
         </DialogHeader>
