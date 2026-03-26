@@ -45,6 +45,8 @@ export default function Vendas() {
   const [salesDateFrom, setSalesDateFrom] = useState("");
   const [salesDateTo, setSalesDateTo] = useState("");
   const [installmentStatusFilter, setInstallmentStatusFilter] = useState("todos");
+  const [salesPage, setSalesPage] = useState(1);
+  const [installmentsPage, setInstallmentsPage] = useState(1);
 
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [formaPagamento, setFormaPagamento] = useState("pix");
