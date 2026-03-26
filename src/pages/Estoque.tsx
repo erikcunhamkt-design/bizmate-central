@@ -206,7 +206,7 @@ export default function Estoque() {
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
-              ) : filtered.map(p => {
+              ) : paginated.map(p => {
                 const margem = calcMargem(p.custo_unitario, p.preco_padrao);
                 const lowStock = p.estoque_atual <= p.alerta_estoque_minimo;
                 return (
