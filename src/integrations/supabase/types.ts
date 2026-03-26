@@ -257,6 +257,36 @@ export type Database = {
         }
         Relationships: []
       }
+      revenue_goals: {
+        Row: {
+          ano: number
+          created_at: string
+          id: string
+          mes: number
+          meta_valor: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ano: number
+          created_at?: string
+          id?: string
+          mes: number
+          meta_valor?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ano?: number
+          created_at?: string
+          id?: string
+          mes?: number
+          meta_valor?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       sale_items: {
         Row: {
           custo_unitario_no_momento: number

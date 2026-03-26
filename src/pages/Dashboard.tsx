@@ -5,6 +5,7 @@ import { useMonthlySalesData } from "@/hooks/useMonthlySalesData";
 import { useOverdueNotifications } from "@/hooks/useOverdueNotifications";
 import { formatBRL } from "@/lib/currency";
 import { StatusBadge } from "@/components/StatusBadge";
+import { RevenueGoalCard } from "@/components/RevenueGoalCard";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
@@ -126,6 +127,11 @@ export default function Dashboard() {
             </Link>
           </Button>
         ))}
+      </motion.div>
+
+      {/* Revenue Goal */}
+      <motion.div variants={item}>
+        <RevenueGoalCard entradas={entradas} />
       </motion.div>
 
       {/* Charts */}
