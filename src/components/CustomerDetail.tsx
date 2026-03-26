@@ -15,7 +15,7 @@ import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
 import { useToast } from "@/hooks/use-toast";
 import {
   ShoppingCart, CheckCircle, AlertTriangle, Package, MapPin, User,
-  Clock, CalendarDays, Pencil, X, Save
+  Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX
 } from "lucide-react";
 
 interface CustomerDetailProps {
@@ -80,6 +80,21 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
       setEditing(false);
     },
     onError: () => toast({ title: "Erro ao atualizar", variant: "destructive" }),
+  });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: async () => {
+      if (!customer) return;
+      const newStatus = customer.status === "ativo" ? "inativo" : "ativo";
+      const { error } = await supabase.from("customers").update({ status: newStatus }).eq("id", customerId!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customer-detail", customerId] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      toast({ title: `Cliente ${customer?.status === "ativo" ? "desativado" : "ativado"}!` });
+    },
+    onError: () => toast({ title: "Erro ao alterar status", variant: "destructive" }),
   });
 
   const startEdit = () => {
