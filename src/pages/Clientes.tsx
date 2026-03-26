@@ -223,9 +223,22 @@ export default function Clientes() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={c.status === "ativo" ? "default" : "secondary"} className={c.status === "ativo" ? "bg-success/10 text-success border-success/20" : ""}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={`gap-1.5 text-xs font-semibold px-2.5 py-1 h-7 rounded-full ${
+                        c.status === "ativo"
+                          ? "bg-success/10 text-success hover:bg-success/20"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleStatusMutation.mutate({ id: c.id, newStatus: c.status === "ativo" ? "inativo" : "ativo" });
+                      }}
+                    >
+                      {c.status === "ativo" ? <UserCheck className="h-3 w-3" /> : <UserX className="h-3 w-3" />}
                       {c.status}
-                    </Badge>
+                    </Button>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
