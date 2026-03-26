@@ -213,6 +213,7 @@ export type Database = {
           created_at: string
           custo_unitario: number
           estoque_atual: number
+          foto_url: string | null
           id: string
           margem_alvo_percent: number | null
           nome: string
@@ -228,6 +229,7 @@ export type Database = {
           created_at?: string
           custo_unitario?: number
           estoque_atual?: number
+          foto_url?: string | null
           id?: string
           margem_alvo_percent?: number | null
           nome: string
@@ -243,6 +245,7 @@ export type Database = {
           created_at?: string
           custo_unitario?: number
           estoque_atual?: number
+          foto_url?: string | null
           id?: string
           margem_alvo_percent?: number | null
           nome?: string
