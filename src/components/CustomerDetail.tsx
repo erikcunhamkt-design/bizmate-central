@@ -1,12 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { formatBRL } from "@/lib/currency";
-import { format } from "date-fns";
+import { format, differenceInDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ShoppingCart, CheckCircle, AlertTriangle, Package } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  ShoppingCart, CheckCircle, AlertTriangle, Package, MapPin, User, Camera,
+  Clock, CalendarDays, Pencil, X, Save
+} from "lucide-react";
 
 interface CustomerDetailProps {
   customerId: string | null;
@@ -15,6 +25,21 @@ interface CustomerDetailProps {
 }
 
 export function CustomerDetail({ customerId, customerName, onClose }: CustomerDetailProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ nome: "", whatsapp: "", email: "", cpf: "", endereco: "", observacoes: "", foto_url: "" });
+
+  const { data: customer } = useQuery({
+    queryKey: ["customer-detail", customerId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("customers").select("*").eq("id", customerId!).single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!customerId,
+  });
+
   const { data: sales = [] } = useQuery({
     queryKey: ["customer-sales", customerId],
     queryFn: async () => {
@@ -35,11 +60,59 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     enabled: !!customerId,
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("customers").update({
+        nome: editForm.nome,
+        whatsapp: editForm.whatsapp || null,
+        email: editForm.email || null,
+        cpf: editForm.cpf || null,
+        endereco: editForm.endereco || null,
+        observacoes: editForm.observacoes || null,
+        foto_url: editForm.foto_url || null,
+      }).eq("id", customerId!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customer-detail", customerId] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      toast({ title: "Cliente atualizado!" });
+      setEditing(false);
+    },
+    onError: () => toast({ title: "Erro ao atualizar", variant: "destructive" }),
+  });
+
+  const startEdit = () => {
+    if (customer) {
+      setEditForm({
+        nome: customer.nome,
+        whatsapp: customer.whatsapp || "",
+        email: customer.email || "",
+        cpf: (customer as any).cpf || "",
+        endereco: (customer as any).endereco || "",
+        observacoes: customer.observacoes || "",
+        foto_url: customer.foto_url || "",
+      });
+      setEditing(true);
+    }
+  };
+
   const totalComprado = sales.reduce((s, sale) => s + sale.total_venda, 0);
   const totalPago = installments.filter(i => i.status === "pago").reduce((s, i) => s + (i.pago_valor ?? i.valor_parcela), 0);
-  const vendasAVista = sales.filter(s => s.status === "pago" && !installments.some(i => i.sale_id === s.id)).reduce((s, sale) => s + sale.total_venda, 0);
-  const totalPagoGeral = totalPago + vendasAVista;
+  const vendasAVista = sales.filter(s => s.forma_pagamento !== "parcelado" || !installments.some(i => i.sale_id === s.id)).reduce((s, sale) => s + sale.total_venda, 0) - sales.filter(s => installments.some(i => i.sale_id === s.id)).reduce((s, sale) => s + sale.total_venda, 0) + sales.reduce((s, sale) => s + sale.total_venda, 0);
+  // Simplified: total paid = installments paid + sales without installments
+  const salesWithInstallments = new Set(installments.map(i => i.sale_id));
+  const vendasSemParcela = sales.filter(s => !salesWithInstallments.has(s.id)).reduce((s, sale) => s + sale.total_venda, 0);
+  const totalPagoGeral = totalPago + vendasSemParcela;
   const totalDevendo = installments.filter(i => i.status === "pendente").reduce((s, i) => s + i.valor_parcela, 0);
+
+  const today = new Date();
+  const overdue = installments.filter(i => i.status === "pendente" && new Date(i.vencimento_data) < today);
+  const isOverdue = overdue.length > 0;
+
+  const lastPurchaseDate = sales.length > 0 ? new Date(sales[0].data_compra) : null;
+  const daysSinceLastPurchase = lastPurchaseDate ? differenceInDays(today, lastPurchaseDate) : null;
+  const isInactive = daysSinceLastPurchase !== null && daysSinceLastPurchase > 30;
 
   const productMap = new Map<string, { nome: string; qtd: number; total: number }>();
   for (const sale of sales) {
@@ -52,27 +125,103 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
   }
   const productsList = Array.from(productMap.values());
 
-  const kpis = [
-    { label: "Total Comprado", value: totalComprado, icon: ShoppingCart, color: "text-primary", bg: "bg-primary/10" },
-    { label: "Total Pago", value: totalPagoGeral, icon: CheckCircle, color: "text-success", bg: "bg-success/10" },
-    { label: "Devendo", value: totalDevendo, icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10" },
-  ];
+  const getStatusLabel = () => {
+    if (isOverdue) return { label: `${overdue.length} parcela(s) atrasada(s)`, color: "text-destructive", bg: "bg-destructive/10", icon: AlertTriangle };
+    if (totalDevendo > 0) return { label: "Em dia", color: "text-success", bg: "bg-success/10", icon: CheckCircle };
+    if (isInactive) return { label: `Inativo há ${daysSinceLastPurchase} dias`, color: "text-warning", bg: "bg-warning/10", icon: Clock };
+    return { label: "Ativo", color: "text-success", bg: "bg-success/10", icon: CheckCircle };
+  };
+  const status = getStatusLabel();
 
   return (
-    <Dialog open={!!customerId} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog open={!!customerId} onOpenChange={(v) => { if (!v) { setEditing(false); onClose(); } }}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <span className="text-lg font-bold text-primary">{customerName.charAt(0).toUpperCase()}</span>
-            </div>
-            {customerName}
-          </DialogTitle>
+          <div className="flex items-center justify-between w-full">
+            <DialogTitle className="flex items-center gap-3">
+              {customer?.foto_url ? (
+                <img src={customer.foto_url} alt={customerName} className="w-12 h-12 rounded-xl object-cover" />
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <span className="text-xl font-bold text-primary">{customerName.charAt(0).toUpperCase()}</span>
+                </div>
+              )}
+              <div>
+                <span>{customerName}</span>
+                <div className={`flex items-center gap-1.5 mt-0.5 ${status.color}`}>
+                  <status.icon className="h-3 w-3" />
+                  <span className="text-xs font-medium">{status.label}</span>
+                </div>
+              </div>
+            </DialogTitle>
+            {!editing && (
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={startEdit}>
+                <Pencil className="h-3.5 w-3.5" /> Editar
+              </Button>
+            )}
+          </div>
         </DialogHeader>
+
+        {/* Edit Form */}
+        {editing && (
+          <Card className="border-border/50">
+            <CardContent className="pt-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Nome *</Label><Input value={editForm.nome} onChange={e => setEditForm(f => ({ ...f, nome: e.target.value }))} className="h-9" /></div>
+                <div className="space-y-1"><Label className="text-xs">CPF</Label><Input value={editForm.cpf} onChange={e => setEditForm(f => ({ ...f, cpf: e.target.value }))} placeholder="000.000.000-00" className="h-9" /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">WhatsApp</Label><Input value={editForm.whatsapp} onChange={e => setEditForm(f => ({ ...f, whatsapp: e.target.value }))} className="h-9" /></div>
+                <div className="space-y-1"><Label className="text-xs">Email</Label><Input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} className="h-9" /></div>
+              </div>
+              <div className="space-y-1"><Label className="text-xs">Endereço</Label><Input value={editForm.endereco} onChange={e => setEditForm(f => ({ ...f, endereco: e.target.value }))} placeholder="Rua, nº, bairro, cidade" className="h-9" /></div>
+              <div className="space-y-1"><Label className="text-xs">URL da Foto</Label><Input value={editForm.foto_url} onChange={e => setEditForm(f => ({ ...f, foto_url: e.target.value }))} placeholder="https://..." className="h-9" /></div>
+              <div className="space-y-1"><Label className="text-xs">Observações</Label><Textarea value={editForm.observacoes} onChange={e => setEditForm(f => ({ ...f, observacoes: e.target.value }))} className="resize-none" rows={2} /></div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => setEditing(false)}><X className="h-3.5 w-3.5 mr-1" />Cancelar</Button>
+                <Button size="sm" className="gradient-primary" disabled={!editForm.nome || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
+                  <Save className="h-3.5 w-3.5 mr-1" />{updateMutation.isPending ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Customer Info */}
+        {!editing && customer && (
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            {(customer as any).cpf && (
+              <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground text-xs">CPF:</span>
+                <span className="font-medium text-xs">{(customer as any).cpf}</span>
+              </div>
+            )}
+            {(customer as any).endereco && (
+              <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2 col-span-2">
+                <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs">{(customer as any).endereco}</span>
+              </div>
+            )}
+            {lastPurchaseDate && (
+              <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
+                <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground text-xs">Última compra:</span>
+                <span className={`font-medium text-xs ${isInactive ? "text-warning" : ""}`}>
+                  {format(lastPurchaseDate, "dd/MM/yyyy")}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* KPIs */}
         <div className="grid grid-cols-3 gap-3">
-          {kpis.map(k => (
+          {[
+            { label: "Total Comprado", value: totalComprado, icon: ShoppingCart, color: "text-primary", bg: "bg-primary/10" },
+            { label: "Total Pago", value: totalPagoGeral, icon: CheckCircle, color: "text-success", bg: "bg-success/10" },
+            { label: "Devendo", value: totalDevendo, icon: AlertTriangle, color: totalDevendo > 0 ? "text-destructive" : "text-muted-foreground", bg: totalDevendo > 0 ? "bg-destructive/10" : "bg-muted" },
+          ].map(k => (
             <Card key={k.label} className="border-border/50">
               <CardContent className="pt-4 pb-3 px-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -86,6 +235,28 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
             </Card>
           ))}
         </div>
+
+        {/* Overdue Alert */}
+        {isOverdue && (
+          <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
+            <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-destructive">{overdue.length} parcela(s) em atraso</p>
+              <p className="text-xs text-destructive/70">Total atrasado: {formatBRL(overdue.reduce((s, i) => s + i.valor_parcela, 0))}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Inactive Alert */}
+        {isInactive && !isOverdue && (
+          <div className="flex items-center gap-3 bg-warning/10 border border-warning/20 rounded-xl px-4 py-3">
+            <Clock className="h-5 w-5 text-warning shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-warning">Cliente inativo</p>
+              <p className="text-xs text-warning/70">Última compra há {daysSinceLastPurchase} dias</p>
+            </div>
+          </div>
+        )}
 
         {/* Produtos comprados */}
         {productsList.length > 0 && (
@@ -165,7 +336,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                 </TableHeader>
                 <TableBody>
                   {installments.map(i => (
-                    <TableRow key={i.id} className="hover:bg-primary/5">
+                    <TableRow key={i.id} className={`hover:bg-primary/5 ${i.status === "pendente" && new Date(i.vencimento_data) < today ? "bg-destructive/5" : ""}`}>
                       <TableCell className="text-sm">{format(new Date(i.vencimento_data), "dd/MM/yyyy")}</TableCell>
                       <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-md">{i.numero_parcela}/{i.total_parcelas}</span></TableCell>
                       <TableCell className="text-sm font-semibold">{formatBRL(i.valor_parcela)}</TableCell>
