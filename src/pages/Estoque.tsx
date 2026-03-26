@@ -102,6 +102,7 @@ export default function Estoque() {
     return matchSearch && matchCategory && matchStock;
   });
 
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const calcMargem = (custo: number, preco: number) => preco === 0 ? 0 : ((preco - custo) / preco * 100);
   const lowStockCount = products.filter(p => p.estoque_atual <= p.alerta_estoque_minimo).length;
 
