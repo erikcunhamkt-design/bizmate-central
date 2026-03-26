@@ -141,10 +141,12 @@ export function RevenueGoalCard({ entradas }: Props) {
                 )}
               </div>
             </div>
-            <Progress value={progress} className="h-3 [&>div]:transition-all [&>div]:duration-500" style={{}} />
-            <style>{`
-              [data-slot="progress-indicator"] { background: hsl(var(--${progressColor.replace("bg-", "")})) !important; }
-            `}</style>
+            <div className="relative h-3 w-full overflow-hidden rounded-full bg-secondary">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${progressColor}`}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
           </>
         )}
       </CardContent>
