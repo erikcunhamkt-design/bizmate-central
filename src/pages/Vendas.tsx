@@ -17,6 +17,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
+import { PaginationControls } from "@/components/PaginationControls";
+
+const PAGE_SIZE = 15;
 
 interface CartItem {
   product_id: string;
