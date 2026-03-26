@@ -365,7 +365,7 @@ export default function Vendas() {
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filteredInstallments.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma parcela encontrada</TableCell></TableRow>
-                  ) : filteredInstallments.map(i => (
+                  ) : paginatedInstallments.map(i => (
                     <TableRow key={i.id} className="hover:bg-primary/5 transition-colors">
                       <TableCell>
                         {editingInstallment?.id === i.id ? (
@@ -411,6 +411,7 @@ export default function Vendas() {
                   ))}
                 </TableBody>
               </Table>
+              <PaginationControls currentPage={installmentsPage} totalItems={filteredInstallments.length} pageSize={PAGE_SIZE} onPageChange={setInstallmentsPage} />
             </CardContent>
           </Card>
         </TabsContent>
