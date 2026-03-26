@@ -8,12 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/lib/currency";
-import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2, TrendingUp, TrendingDown, BarChart3, Archive } from "lucide-react";
+import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2, TrendingUp, TrendingDown, BarChart3, Archive, FileDown, FileSpreadsheet, History } from "lucide-react";
 import { motion } from "framer-motion";
 import { PaginationControls } from "@/components/PaginationControls";
 import { ProductForm } from "@/components/ProductForm";
+import { StockMovementHistory } from "@/components/StockMovementHistory";
+import { exportEstoqueCSV, exportEstoquePDF } from "@/lib/exportEstoque";
 
 const PAGE_SIZE = 15;
 
