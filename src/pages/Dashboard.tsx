@@ -6,6 +6,7 @@ import { useOverdueNotifications } from "@/hooks/useOverdueNotifications";
 import { formatBRL } from "@/lib/currency";
 import { StatusBadge } from "@/components/StatusBadge";
 import { RevenueGoalCard } from "@/components/RevenueGoalCard";
+import { RevenueGoalHistory } from "@/components/RevenueGoalHistory";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
@@ -134,7 +135,11 @@ export default function Dashboard() {
         <RevenueGoalCard entradas={entradas} />
       </motion.div>
 
-      {/* Charts */}
+      {/* Revenue Goal History */}
+      <motion.div variants={item}>
+        <RevenueGoalHistory />
+      </motion.div>
+
       <motion.div variants={item}>
         <Card className="border-border/50">
           <CardHeader className="pb-2">
