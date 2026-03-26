@@ -14,7 +14,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -32,10 +31,13 @@ import {
   isSameDay,
   addMonths,
   subMonths,
+  addWeeks,
+  addDays,
   startOfWeek,
   endOfWeek,
   isToday,
   isBefore,
+  isAfter,
   startOfDay,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -52,6 +54,8 @@ import {
   Bell,
   Trash2,
   Clock,
+  Pencil,
+  Repeat,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -65,6 +69,7 @@ type CalendarEvent = {
   status: string;
   hora?: string | null;
   customEventId?: string;
+  recorrencia?: string | null;
 };
 
 type FilterType = "todos" | "parcela" | "conta" | "pagamento" | "venda" | "lembrete";
@@ -84,17 +89,69 @@ const COR_OPTIONS = [
   { value: "destructive", label: "Vermelho", class: "bg-destructive" },
 ];
 
+const RECORRENCIA_OPTIONS = [
+  { value: "none", label: "Sem repetição" },
+  { value: "semanal", label: "Semanal" },
+  { value: "quinzenal", label: "Quinzenal" },
+  { value: "mensal", label: "Mensal" },
+];
+
+const RECORRENCIA_LABELS: Record<string, string> = {
+  semanal: "Semanal",
+  quinzenal: "Quinzenal",
+  mensal: "Mensal",
+};
+
+// Generate occurrences of recurring events within a date range
+function expandRecurring(
+  ev: { id: string; data: string; titulo: string; hora: string | null; cor: string; recorrencia: string | null; recorrencia_fim: string | null; descricao: string | null },
+  rangeStart: string,
+  rangeEnd: string
+): { date: string; sourceId: string }[] {
+  const results: { date: string; sourceId: string }[] = [];
+  const baseDate = new Date(ev.data);
+  const rStart = new Date(rangeStart);
+  const rEnd = new Date(rangeEnd);
+  const rFim = ev.recorrencia_fim ? new Date(ev.recorrencia_fim) : addMonths(rEnd, 12);
+
+  if (!ev.recorrencia || ev.recorrencia === "none") {
+    return [];
+  }
+
+  let current = baseDate;
+  let safety = 0;
+  while (safety < 200) {
+    safety++;
+    if (ev.recorrencia === "semanal") current = addWeeks(baseDate, safety);
+    else if (ev.recorrencia === "quinzenal") current = addWeeks(baseDate, safety * 2);
+    else if (ev.recorrencia === "mensal") current = addMonths(baseDate, safety);
+    else break;
+
+    if (isAfter(current, rFim)) break;
+    if (isBefore(current, rStart)) continue;
+    if (isAfter(current, rEnd)) break;
+
+    results.push({ date: format(current, "yyyy-MM-dd"), sourceId: ev.id });
+  }
+  return results;
+}
+
 export default function Calendario() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [filter, setFilter] = useState<FilterType>("todos");
-  const [showNewEvent, setShowNewEvent] = useState(false);
-  const [newTitulo, setNewTitulo] = useState("");
-  const [newDescricao, setNewDescricao] = useState("");
-  const [newHora, setNewHora] = useState("");
-  const [newCor, setNewCor] = useState("primary");
+
+  // Event form state (shared for create & edit)
+  const [showEventDialog, setShowEventDialog] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [formTitulo, setFormTitulo] = useState("");
+  const [formDescricao, setFormDescricao] = useState("");
+  const [formHora, setFormHora] = useState("");
+  const [formCor, setFormCor] = useState("primary");
+  const [formRecorrencia, setFormRecorrencia] = useState("none");
+  const [formRecorrenciaFim, setFormRecorrenciaFim] = useState("");
 
   const mesInicio = format(startOfMonth(currentMonth), "yyyy-MM-dd");
   const mesFim = format(endOfMonth(currentMonth), "yyyy-MM-dd");
@@ -139,39 +196,81 @@ export default function Calendario() {
     enabled: !!user,
   });
 
+  // Fetch custom events — also fetch recurring ones that started before this month
   const { data: customEvents = [] } = useQuery({
     queryKey: ["cal-custom-events", user?.id, mesInicio],
     queryFn: async () => {
-      const { data, error } = await supabase.from("calendar_events").select("*").gte("data", mesInicio).lte("data", mesFim).order("hora", { ascending: true });
+      const { data, error } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .or(`and(data.gte.${mesInicio},data.lte.${mesFim}),and(recorrencia.neq.none,recorrencia.not.is.null,data.lte.${mesFim})`)
+        .order("hora", { ascending: true });
       if (error) throw error;
       return data;
     },
     enabled: !!user,
   });
 
-  const createEvent = useMutation({
+  const resetForm = () => {
+    setFormTitulo("");
+    setFormDescricao("");
+    setFormHora("");
+    setFormCor("primary");
+    setFormRecorrencia("none");
+    setFormRecorrenciaFim("");
+    setEditingEventId(null);
+  };
+
+  const openCreateDialog = () => {
+    resetForm();
+    setShowEventDialog(true);
+  };
+
+  const openEditDialog = (eventId: string) => {
+    const ce = customEvents.find((e) => e.id === eventId);
+    if (!ce) return;
+    setEditingEventId(eventId);
+    setFormTitulo(ce.titulo);
+    setFormDescricao(ce.descricao || "");
+    setFormHora(ce.hora || "");
+    setFormCor(ce.cor || "primary");
+    setFormRecorrencia((ce as any).recorrencia || "none");
+    setFormRecorrenciaFim((ce as any).recorrencia_fim || "");
+    setShowEventDialog(true);
+  };
+
+  const saveEvent = useMutation({
     mutationFn: async () => {
-      if (!selectedDate || !newTitulo.trim()) return;
-      const { error } = await supabase.from("calendar_events").insert({
-        user_id: user!.id,
-        titulo: newTitulo.trim(),
-        descricao: newDescricao.trim() || null,
-        data: format(selectedDate, "yyyy-MM-dd"),
-        hora: newHora || null,
-        cor: newCor,
-      });
-      if (error) throw error;
+      if (!formTitulo.trim()) return;
+      const payload = {
+        titulo: formTitulo.trim(),
+        descricao: formDescricao.trim() || null,
+        hora: formHora || null,
+        cor: formCor,
+        recorrencia: formRecorrencia === "none" ? null : formRecorrencia,
+        recorrencia_fim: formRecorrenciaFim || null,
+      };
+
+      if (editingEventId) {
+        const { error } = await supabase.from("calendar_events").update(payload).eq("id", editingEventId);
+        if (error) throw error;
+      } else {
+        if (!selectedDate) return;
+        const { error } = await supabase.from("calendar_events").insert({
+          ...payload,
+          user_id: user!.id,
+          data: format(selectedDate, "yyyy-MM-dd"),
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cal-custom-events"] });
-      toast.success("Evento criado!");
-      setShowNewEvent(false);
-      setNewTitulo("");
-      setNewDescricao("");
-      setNewHora("");
-      setNewCor("primary");
+      toast.success(editingEventId ? "Evento atualizado!" : "Evento criado!");
+      setShowEventDialog(false);
+      resetForm();
     },
-    onError: () => toast.error("Erro ao criar evento"),
+    onError: () => toast.error("Erro ao salvar evento"),
   });
 
   const deleteEvent = useMutation({
@@ -187,6 +286,31 @@ export default function Calendario() {
   });
 
   const events: CalendarEvent[] = useMemo(() => {
+    // Build custom events with recurrence expansion
+    const customMapped: CalendarEvent[] = [];
+    for (const ce of customEvents) {
+      const ceData = ce.data;
+      // Add original if in range
+      if (ceData >= mesInicio && ceData <= mesFim) {
+        customMapped.push({
+          id: `custom-${ce.id}`, date: ceData, tipo: "lembrete",
+          descricao: ce.titulo, valor: 0, status: "lembrete",
+          hora: ce.hora, customEventId: ce.id,
+          recorrencia: (ce as any).recorrencia,
+        });
+      }
+      // Expand recurring
+      const occurrences = expandRecurring(ce as any, mesInicio, mesFim);
+      for (const occ of occurrences) {
+        customMapped.push({
+          id: `custom-${ce.id}-${occ.date}`, date: occ.date, tipo: "lembrete",
+          descricao: ce.titulo, valor: 0, status: "lembrete",
+          hora: ce.hora, customEventId: ce.id,
+          recorrencia: (ce as any).recorrencia,
+        });
+      }
+    }
+
     const all: CalendarEvent[] = [
       ...installments.map((i) => ({
         id: `inst-${i.id}`, date: i.vencimento_data, tipo: "parcela" as const,
@@ -206,14 +330,10 @@ export default function Calendario() {
         descricao: `Venda — ${(s as any).customers?.nome ?? "Cliente"}`,
         valor: s.total_venda, status: s.status,
       })),
-      ...customEvents.map((ce) => ({
-        id: `custom-${ce.id}`, date: ce.data, tipo: "lembrete" as const,
-        descricao: ce.titulo, valor: 0, status: "lembrete",
-        hora: ce.hora, customEventId: ce.id,
-      })),
+      ...customMapped,
     ];
     return filter === "todos" ? all : all.filter((e) => e.tipo === filter);
-  }, [installments, expenses, cashMovements, sales, customEvents, filter]);
+  }, [installments, expenses, cashMovements, sales, customEvents, filter, mesInicio, mesFim]);
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -252,8 +372,82 @@ export default function Calendario() {
     { key: "lembrete", label: "Lembretes" },
   ];
 
+  // Event form dialog (shared for create & edit)
+  const eventFormDialog = (
+    <Dialog open={showEventDialog} onOpenChange={(open) => { setShowEventDialog(open); if (!open) resetForm(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-base">
+            {editingEventId ? "Editar Evento" : `Novo Evento — ${selectedDate ? format(selectedDate, "dd/MM/yyyy") : ""}`}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 pt-2">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Título *</label>
+            <Input value={formTitulo} onChange={(e) => setFormTitulo(e.target.value)} placeholder="Ex: Reunião com fornecedor" className="h-9 text-sm" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Descrição</label>
+            <Textarea value={formDescricao} onChange={(e) => setFormDescricao(e.target.value)} placeholder="Detalhes do evento..." className="text-sm min-h-[60px]" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Horário</label>
+              <Input type="time" value={formHora} onChange={(e) => setFormHora(e.target.value)} className="h-9 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Cor</label>
+              <Select value={formCor} onValueChange={setFormCor}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {COR_OPTIONS.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${c.class}`} />
+                        {c.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Repetir</label>
+              <Select value={formRecorrencia} onValueChange={setFormRecorrencia}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {RECORRENCIA_OPTIONS.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {formRecorrencia !== "none" && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Repetir até</label>
+                <Input type="date" value={formRecorrenciaFim} onChange={(e) => setFormRecorrenciaFim(e.target.value)} className="h-9 text-sm" />
+              </div>
+            )}
+          </div>
+          <Button onClick={() => saveEvent.mutate()} disabled={!formTitulo.trim() || saveEvent.isPending} className="w-full gap-2">
+            {editingEventId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {editingEventId ? "Salvar Alterações" : "Criar Evento"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      {eventFormDialog}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Calendário</h1>
@@ -387,56 +581,9 @@ export default function Calendario() {
                 {selectedDate ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR }) : "Selecione um dia"}
               </CardTitle>
               {selectedDate && (
-                <Dialog open={showNewEvent} onOpenChange={setShowNewEvent}>
-                  <DialogTrigger asChild>
-                    <Button variant="ghost" size="icon" className="ml-auto h-7 w-7">
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-sm">
-                    <DialogHeader>
-                      <DialogTitle className="text-base">Novo Evento — {format(selectedDate, "dd/MM/yyyy")}</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-3 pt-2">
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Título *</label>
-                        <Input value={newTitulo} onChange={(e) => setNewTitulo(e.target.value)} placeholder="Ex: Reunião com fornecedor" className="h-9 text-sm" />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Descrição</label>
-                        <Textarea value={newDescricao} onChange={(e) => setNewDescricao(e.target.value)} placeholder="Detalhes do evento..." className="text-sm min-h-[60px]" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-xs font-medium text-muted-foreground mb-1 block">Horário</label>
-                          <Input type="time" value={newHora} onChange={(e) => setNewHora(e.target.value)} className="h-9 text-sm" />
-                        </div>
-                        <div>
-                          <label className="text-xs font-medium text-muted-foreground mb-1 block">Cor</label>
-                          <Select value={newCor} onValueChange={setNewCor}>
-                            <SelectTrigger className="h-9 text-sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {COR_OPTIONS.map((c) => (
-                                <SelectItem key={c.value} value={c.value}>
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-3 h-3 rounded-full ${c.class}`} />
-                                    {c.label}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <Button onClick={() => createEvent.mutate()} disabled={!newTitulo.trim() || createEvent.isPending} className="w-full gap-2">
-                        <Plus className="h-4 w-4" />
-                        Criar Evento
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                <Button variant="ghost" size="icon" className="ml-auto h-7 w-7" onClick={openCreateDialog}>
+                  <Plus className="h-4 w-4" />
+                </Button>
               )}
             </div>
           </CardHeader>
@@ -447,7 +594,7 @@ export default function Calendario() {
               <div className="text-center py-8">
                 <div className="text-2xl mb-1">📭</div>
                 <p className="text-sm text-muted-foreground mb-3">Nenhum evento neste dia</p>
-                <Button variant="outline" size="sm" className="gap-2" onClick={() => setShowNewEvent(true)}>
+                <Button variant="outline" size="sm" className="gap-2" onClick={openCreateDialog}>
                   <Plus className="h-3.5 w-3.5" />
                   Criar Evento
                 </Button>
@@ -478,14 +625,24 @@ export default function Calendario() {
                           <div className="flex items-start justify-between gap-1">
                             <p className="text-sm font-semibold truncate">{ev.descricao}</p>
                             {ev.customEventId && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive"
-                                onClick={() => deleteEvent.mutate(ev.customEventId!)}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 text-muted-foreground hover:text-primary"
+                                  onClick={() => openEditDialog(ev.customEventId!)}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                                  onClick={() => deleteEvent.mutate(ev.customEventId!)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
                             )}
                           </div>
                           <div className="flex items-center justify-between mt-1">
@@ -497,6 +654,12 @@ export default function Calendario() {
                                 <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
                                   <Clock className="h-2.5 w-2.5" />
                                   {ev.hora.slice(0, 5)}
+                                </span>
+                              )}
+                              {ev.recorrencia && RECORRENCIA_LABELS[ev.recorrencia] && (
+                                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 bg-secondary px-1.5 py-0.5 rounded-full">
+                                  <Repeat className="h-2.5 w-2.5" />
+                                  {RECORRENCIA_LABELS[ev.recorrencia]}
                                 </span>
                               )}
                             </div>
