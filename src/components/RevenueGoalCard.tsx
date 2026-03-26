@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +57,38 @@ export function RevenueGoalCard({ entradas }: Props) {
   const metaValor = goal?.meta_valor ?? 0;
   const progress = metaValor > 0 ? Math.min((entradas / metaValor) * 100, 100) : 0;
   const remaining = Math.max(metaValor - entradas, 0);
+
+  // Notificações de marco (80% e 100%)
+  const notified80 = useRef(false);
+  const notified100 = useRef(false);
+
+  useEffect(() => {
+    if (metaValor <= 0) return;
+
+    if (progress >= 80 && progress < 100 && !notified80.current) {
+      notified80.current = true;
+      toast("🔥 Você atingiu 80% da meta!", {
+        description: `Faltam apenas ${formatBRL(remaining)} para bater a meta de ${formatBRL(metaValor)}`,
+      });
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("🔥 80% da meta atingida!", {
+          body: `Faltam ${formatBRL(remaining)} para ${formatBRL(metaValor)}`,
+        });
+      }
+    }
+
+    if (progress >= 100 && !notified100.current) {
+      notified100.current = true;
+      toast.success("🎉 Meta de faturamento atingida!", {
+        description: `Parabéns! Você faturou ${formatBRL(entradas)} este mês.`,
+      });
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("🎉 Meta atingida!", {
+          body: `Parabéns! Faturamento de ${formatBRL(entradas)} superou a meta de ${formatBRL(metaValor)}`,
+        });
+      }
+    }
+  }, [progress, metaValor, entradas, remaining]);
 
   const handleSave = () => {
     const val = parseFloat(inputValue.replace(/\D/g, "")) / 100;
