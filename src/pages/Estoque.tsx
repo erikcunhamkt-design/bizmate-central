@@ -5,19 +5,19 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/lib/currency";
-import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2, TrendingUp, TrendingDown, BarChart3, Archive } from "lucide-react";
 import { motion } from "framer-motion";
 import { PaginationControls } from "@/components/PaginationControls";
+import { ProductForm } from "@/components/ProductForm";
 
 const PAGE_SIZE = 15;
 
-const emptyForm = { nome: "", custo_unitario: "", preco_padrao: "", estoque_atual: "", alerta_estoque_minimo: "5", categoria: "", sku: "" };
+const emptyForm = { nome: "", custo_unitario: "", preco_padrao: "", estoque_atual: "", alerta_estoque_minimo: "5", categoria: "", sku: "", foto_url: "" };
 
 export default function Estoque() {
   const { user } = useAuth();
@@ -45,15 +45,21 @@ export default function Estoque() {
   const createMutation = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("products").insert({
-        nome: form.nome, custo_unitario: Number(form.custo_unitario), preco_padrao: Number(form.preco_padrao),
-        estoque_atual: Number(form.estoque_atual) || 0, alerta_estoque_minimo: Number(form.alerta_estoque_minimo) || 5,
-        categoria: form.categoria || null, sku: form.sku || null, user_id: user!.id,
+        nome: form.nome,
+        custo_unitario: Number(form.custo_unitario),
+        preco_padrao: Number(form.preco_padrao),
+        estoque_atual: Number(form.estoque_atual) || 0,
+        alerta_estoque_minimo: Number(form.alerta_estoque_minimo) || 5,
+        categoria: form.categoria || null,
+        sku: form.sku || null,
+        foto_url: form.foto_url || null,
+        user_id: user!.id,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      toast({ title: "Produto criado!" });
+      toast({ title: "Produto criado com sucesso!" });
       setOpen(false);
       setForm(emptyForm);
     },
@@ -63,9 +69,14 @@ export default function Estoque() {
   const updateMutation = useMutation({
     mutationFn: async (data: any) => {
       const { error } = await supabase.from("products").update({
-        nome: data.nome, custo_unitario: Number(data.custo_unitario), preco_padrao: Number(data.preco_padrao),
-        estoque_atual: Number(data.estoque_atual), alerta_estoque_minimo: Number(data.alerta_estoque_minimo),
-        categoria: data.categoria || null, sku: data.sku || null,
+        nome: data.nome,
+        custo_unitario: Number(data.custo_unitario),
+        preco_padrao: Number(data.preco_padrao),
+        estoque_atual: Number(data.estoque_atual),
+        alerta_estoque_minimo: Number(data.alerta_estoque_minimo),
+        categoria: data.categoria || null,
+        sku: data.sku || null,
+        foto_url: data.foto_url || null,
       }).eq("id", data.id);
       if (error) throw error;
     },
@@ -87,16 +98,16 @@ export default function Estoque() {
       toast({ title: "Produto excluído!" });
       setDeleteConfirm(null);
     },
-    onError: () => toast({ title: "Erro ao excluir produto. Verifique se não há vendas vinculadas.", variant: "destructive" }),
+    onError: () => toast({ title: "Erro ao excluir. Verifique se não há vendas vinculadas.", variant: "destructive" }),
   });
 
   const categories = [...new Set(products.map(p => p.categoria).filter(Boolean))] as string[];
 
   const filtered = products.filter(p => {
-    const matchSearch = p.nome.toLowerCase().includes(search.toLowerCase()) || p.categoria?.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = p.nome.toLowerCase().includes(search.toLowerCase()) || p.categoria?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase());
     const matchCategory = categoryFilter === "todos" || p.categoria === categoryFilter;
     const matchStock = stockFilter === "todos" ? true :
-      stockFilter === "baixo" ? p.estoque_atual <= p.alerta_estoque_minimo :
+      stockFilter === "baixo" ? (p.estoque_atual <= p.alerta_estoque_minimo && p.estoque_atual > 0) :
       stockFilter === "zerado" ? p.estoque_atual === 0 :
       p.estoque_atual > p.alerta_estoque_minimo;
     return matchSearch && matchCategory && matchStock;
@@ -104,51 +115,45 @@ export default function Estoque() {
 
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const calcMargem = (custo: number, preco: number) => preco === 0 ? 0 : ((preco - custo) / preco * 100);
-  const lowStockCount = products.filter(p => p.estoque_atual <= p.alerta_estoque_minimo).length;
+
+  const totalEstoqueValor = products.reduce((acc, p) => acc + (p.estoque_atual * p.custo_unitario), 0);
+  const totalEstoqueVenda = products.reduce((acc, p) => acc + (p.estoque_atual * p.preco_padrao), 0);
+  const lowStockCount = products.filter(p => p.estoque_atual <= p.alerta_estoque_minimo && p.estoque_atual > 0).length;
+  const zeroStockCount = products.filter(p => p.estoque_atual === 0).length;
+  const avgMargem = products.length > 0 ? products.reduce((acc, p) => acc + calcMargem(p.custo_unitario, p.preco_padrao), 0) / products.length : 0;
 
   const openEdit = (p: any) => {
     setEditingProduct({
       id: p.id, nome: p.nome, custo_unitario: String(p.custo_unitario), preco_padrao: String(p.preco_padrao),
       estoque_atual: String(p.estoque_atual), alerta_estoque_minimo: String(p.alerta_estoque_minimo),
-      categoria: p.categoria || "", sku: p.sku || "",
+      categoria: p.categoria || "", sku: p.sku || "", foto_url: p.foto_url || "",
     });
   };
 
-  const ProductForm = ({ data, setData, onSave, isPending, buttonLabel }: any) => (
-    <div className="space-y-4">
-      <div className="space-y-1.5"><Label>Nome *</Label><Input value={data.nome} onChange={e => setData((f: any) => ({ ...f, nome: e.target.value }))} className="h-10" /></div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5"><Label>Custo Unit. *</Label><Input type="number" step="0.01" value={data.custo_unitario} onChange={e => setData((f: any) => ({ ...f, custo_unitario: e.target.value }))} className="h-10" /></div>
-        <div className="space-y-1.5"><Label>Preço Venda *</Label><Input type="number" step="0.01" value={data.preco_padrao} onChange={e => setData((f: any) => ({ ...f, preco_padrao: e.target.value }))} className="h-10" /></div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5"><Label>Estoque Atual</Label><Input type="number" value={data.estoque_atual} onChange={e => setData((f: any) => ({ ...f, estoque_atual: e.target.value }))} className="h-10" /></div>
-        <div className="space-y-1.5"><Label>Alerta Mínimo</Label><Input type="number" value={data.alerta_estoque_minimo} onChange={e => setData((f: any) => ({ ...f, alerta_estoque_minimo: e.target.value }))} className="h-10" /></div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5"><Label>Categoria</Label><Input value={data.categoria} onChange={e => setData((f: any) => ({ ...f, categoria: e.target.value }))} className="h-10" /></div>
-        <div className="space-y-1.5"><Label>SKU</Label><Input value={data.sku} onChange={e => setData((f: any) => ({ ...f, sku: e.target.value }))} className="h-10" /></div>
-      </div>
-      <Button className="w-full h-10 gradient-primary" disabled={!data.nome || !data.custo_unitario || !data.preco_padrao || isPending} onClick={onSave}>
-        {isPending ? "Salvando..." : buttonLabel}
-      </Button>
-    </div>
-  );
+  const stats = [
+    { label: "Produtos", value: products.length, icon: PackageIcon, color: "text-primary" },
+    { label: "Valor em Estoque", value: formatBRL(totalEstoqueValor), icon: Archive, color: "text-primary" },
+    { label: "Potencial de Venda", value: formatBRL(totalEstoqueVenda), icon: TrendingUp, color: "text-success" },
+    { label: "Margem Média", value: `${avgMargem.toFixed(1)}%`, icon: BarChart3, color: avgMargem >= 30 ? "text-success" : "text-warning" },
+  ];
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Estoque</h1>
           <p className="text-sm text-muted-foreground">
-            {products.length} produtos • {lowStockCount > 0 && <span className="text-warning font-semibold">{lowStockCount} com estoque baixo</span>}
+            {products.length} produtos
+            {lowStockCount > 0 && <span className="text-warning font-semibold ml-1">• {lowStockCount} baixo</span>}
+            {zeroStockCount > 0 && <span className="text-destructive font-semibold ml-1">• {zeroStockCount} zerado</span>}
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2 gradient-primary shadow-glow"><Plus className="h-4 w-4" />Novo Produto</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
@@ -157,19 +162,36 @@ export default function Estoque() {
                 Novo Produto
               </DialogTitle>
             </DialogHeader>
-            <ProductForm data={form} setData={setForm} onSave={() => createMutation.mutate()} isPending={createMutation.isPending} buttonLabel="Salvar Produto" />
+            <ProductForm data={form} setData={setForm} onSave={() => createMutation.mutate()} isPending={createMutation.isPending} buttonLabel="Criar Produto" />
           </DialogContent>
         </Dialog>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {stats.map((stat) => (
+          <Card key={stat.label} className="border-border/50">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <stat.icon className={`h-5 w-5 ${stat.color}`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] text-muted-foreground font-medium truncate">{stat.label}</p>
+                <p className="text-lg font-bold tracking-tight truncate">{stat.value}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar produtos ou categorias..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-10 bg-card border-border/50" />
+          <Input placeholder="Buscar por nome, categoria ou SKU..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9 h-10 bg-card border-border/50" />
         </div>
         {categories.length > 0 && (
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <Select value={categoryFilter} onValueChange={v => { setCategoryFilter(v); setPage(1); }}>
             <SelectTrigger className="w-40 h-10 bg-card border-border/50"><SelectValue placeholder="Categoria" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todas categorias</SelectItem>
@@ -177,7 +199,7 @@ export default function Estoque() {
             </SelectContent>
           </Select>
         )}
-        <Select value={stockFilter} onValueChange={setStockFilter}>
+        <Select value={stockFilter} onValueChange={v => { setStockFilter(v); setPage(1); }}>
           <SelectTrigger className="w-36 h-10 bg-card border-border/50"><SelectValue placeholder="Estoque" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todo estoque</SelectItem>
@@ -188,6 +210,7 @@ export default function Estoque() {
         </Select>
       </div>
 
+      {/* Table */}
       <Card className="border-border/50 overflow-hidden">
         <CardContent className="p-0">
           <Table>
@@ -203,21 +226,26 @@ export default function Estoque() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
               ) : paginated.map(p => {
                 const margem = calcMargem(p.custo_unitario, p.preco_padrao);
                 const lowStock = p.estoque_atual <= p.alerta_estoque_minimo;
+                const zeroStock = p.estoque_atual === 0;
                 return (
                   <TableRow key={p.id} className="hover:bg-primary/5 transition-colors group">
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <PackageIcon className="h-4 w-4 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-sm">{p.nome}</p>
+                        {p.foto_url ? (
+                          <img src={p.foto_url} alt={p.nome} className="w-10 h-10 rounded-lg object-cover border border-border/50 shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                            <PackageIcon className="h-4 w-4 text-primary" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm truncate">{p.nome}</p>
                           <div className="flex items-center gap-2">
                             {p.categoria && <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{p.categoria}</span>}
                             {p.sku && <span className="text-[11px] text-muted-foreground">SKU: {p.sku}</span>}
@@ -225,17 +253,23 @@ export default function Estoque() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">{formatBRL(p.custo_unitario)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{formatBRL(p.custo_unitario)}</TableCell>
                     <TableCell className="text-sm font-semibold">{formatBRL(p.preco_padrao)}</TableCell>
                     <TableCell>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
-                        margem >= 30 ? "bg-success/10 text-success" : margem >= 15 ? "bg-warning/10 text-warning" : "bg-destructive/10 text-destructive"
-                      }`}>{margem.toFixed(1)}%</span>
+                      <div className="flex items-center gap-1.5">
+                        {margem >= 30 ? <TrendingUp className="h-3.5 w-3.5 text-success" /> : <TrendingDown className="h-3.5 w-3.5 text-warning" />}
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                          margem >= 30 ? "bg-success/10 text-success" : margem >= 15 ? "bg-warning/10 text-warning" : "bg-destructive/10 text-destructive"
+                        }`}>{margem.toFixed(1)}%</span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <span className={`text-sm font-semibold ${lowStock ? "text-warning" : ""}`}>{p.estoque_atual}</span>
-                        {lowStock && <AlertTriangle className="h-3.5 w-3.5 text-warning" />}
+                        <span className={`text-sm font-semibold ${zeroStock ? "text-destructive" : lowStock ? "text-warning" : ""}`}>
+                          {p.estoque_atual}
+                        </span>
+                        {zeroStock && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-destructive/10 text-destructive">ZERADO</span>}
+                        {lowStock && !zeroStock && <AlertTriangle className="h-3.5 w-3.5 text-warning" />}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -253,8 +287,9 @@ export default function Estoque() {
         </CardContent>
       </Card>
 
+      {/* Edit Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={(v) => { if (!v) setEditingProduct(null); }}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
@@ -269,6 +304,7 @@ export default function Estoque() {
         </DialogContent>
       </Dialog>
 
+      {/* Delete Dialog */}
       <Dialog open={!!deleteConfirm} onOpenChange={(v) => { if (!v) setDeleteConfirm(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Excluir Produto</DialogTitle></DialogHeader>
