@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/PaginationControls";
+import { StockEvolutionChart } from "@/components/StockEvolutionChart";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowUpCircle, ArrowDownCircle, RefreshCw, Plus, Search, Package as PackageIcon } from "lucide-react";

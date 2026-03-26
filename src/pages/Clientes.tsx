@@ -17,6 +17,7 @@ import { useSearchParams } from "react-router-dom";
 import { CustomerDetail } from "@/components/CustomerDetail";
 import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
 import { PaginationControls } from "@/components/PaginationControls";
+import { InactiveClientsWhatsApp } from "@/components/InactiveClientsWhatsApp";
 import { motion } from "framer-motion";
 
 const PAGE_SIZE = 15;
@@ -270,6 +271,11 @@ export default function Clientes() {
       {selectedCustomer && (
         <CustomerDetail customerId={selectedCustomer.id} customerName={selectedCustomer.nome} onClose={() => setSelectedCustomer(null)} />
       )}
+
+      {/* Inactive clients WhatsApp */}
+      <InactiveClientsWhatsApp />
     </motion.div>
+  );
+}
   );
 }
