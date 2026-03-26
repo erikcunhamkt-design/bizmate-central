@@ -11,7 +11,7 @@ import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useSearchParams } from "react-router-dom";
-import { CheckCircle, Plus, Trash2, Pencil, ShoppingCart, CreditCard, Search } from "lucide-react";
+import { CheckCircle, Plus, Trash2, Pencil, ShoppingCart, CreditCard, Search, Filter } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,13 @@ export default function Vendas() {
   const defaultTab = searchParams.get("tab") === "parcelas" ? "parcelas" : "vendas";
   const [openNova, setOpenNova] = useState(searchParams.get("nova") === "1");
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Filters
+  const [salesStatusFilter, setSalesStatusFilter] = useState("todos");
+  const [salesPaymentFilter, setSalesPaymentFilter] = useState("todos");
+  const [salesDateFrom, setSalesDateFrom] = useState("");
+  const [salesDateTo, setSalesDateTo] = useState("");
+  const [installmentStatusFilter, setInstallmentStatusFilter] = useState("todos");
 
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [formaPagamento, setFormaPagamento] = useState("pix");
@@ -214,9 +221,23 @@ export default function Vendas() {
 
   const totalCart = cart.length > 0 ? cart.reduce((s, c) => s + c.preco * c.quantidade, 0) : parseFloat(manualTotal) || 0;
 
-  const filteredInstallments = installments.filter(i =>
-    !searchTerm || (i as any).customers?.nome?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filtered data
+  const filteredSales = sales.filter(s => {
+    const matchSearch = !searchTerm || (s as any).customers?.nome?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchStatus = salesStatusFilter === "todos" || s.status === salesStatusFilter;
+    const matchPayment = salesPaymentFilter === "todos" || s.forma_pagamento === salesPaymentFilter;
+    const matchDateFrom = !salesDateFrom || s.data_compra >= salesDateFrom;
+    const matchDateTo = !salesDateTo || s.data_compra <= salesDateTo;
+    return matchSearch && matchStatus && matchPayment && matchDateFrom && matchDateTo;
+  });
+
+  const filteredInstallments = installments.filter(i => {
+    const matchSearch = !searchTerm || (i as any).customers?.nome?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchStatus = installmentStatusFilter === "todos" ? true :
+      installmentStatusFilter === "atrasado" ? (i.status === "pendente" && new Date(i.vencimento_data) < new Date()) :
+      i.status === installmentStatusFilter;
+    return matchSearch && matchStatus;
+  });
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -240,7 +261,35 @@ export default function Vendas() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="vendas">
+        <TabsContent value="vendas" className="space-y-4">
+          {/* Filters */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar por cliente..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-9 h-10 bg-card border-border/50" />
+            </div>
+            <Select value={salesStatusFilter} onValueChange={setSalesStatusFilter}>
+              <SelectTrigger className="w-32 h-10 bg-card border-border/50"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="ativa">Ativa</SelectItem>
+                <SelectItem value="pago">Pago</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={salesPaymentFilter} onValueChange={setSalesPaymentFilter}>
+              <SelectTrigger className="w-36 h-10 bg-card border-border/50"><SelectValue placeholder="Pagamento" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="pix">PIX</SelectItem>
+                <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                <SelectItem value="cartao">Cartão</SelectItem>
+                <SelectItem value="parcelado">Parcelado</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input type="date" value={salesDateFrom} onChange={e => setSalesDateFrom(e.target.value)} className="w-36 h-10 bg-card border-border/50" placeholder="De" />
+            <Input type="date" value={salesDateTo} onChange={e => setSalesDateTo(e.target.value)} className="w-36 h-10 bg-card border-border/50" placeholder="Até" />
+          </div>
+
           <Card className="border-border/50 overflow-hidden">
             <CardContent className="p-0">
               <Table>
@@ -256,9 +305,9 @@ export default function Vendas() {
                 <TableBody>
                   {salesLoading ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-                  ) : sales.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma venda registrada</TableCell></TableRow>
-                  ) : sales.map(s => (
+                  ) : filteredSales.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma venda encontrada</TableCell></TableRow>
+                  ) : filteredSales.map(s => (
                     <TableRow key={s.id} className="hover:bg-primary/5 transition-colors">
                       <TableCell className="text-sm">{format(new Date(s.data_compra), "dd/MM/yyyy")}</TableCell>
                       <TableCell className="font-semibold text-sm">{(s as any).customers?.nome ?? "—"}</TableCell>
@@ -274,9 +323,20 @@ export default function Vendas() {
         </TabsContent>
 
         <TabsContent value="parcelas" className="space-y-4">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por cliente..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-9 h-10 bg-card border-border/50" />
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar por cliente..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-9 h-10 bg-card border-border/50" />
+            </div>
+            <Select value={installmentStatusFilter} onValueChange={setInstallmentStatusFilter}>
+              <SelectTrigger className="w-36 h-10 bg-card border-border/50"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="pendente">Pendente</SelectItem>
+                <SelectItem value="pago">Pago</SelectItem>
+                <SelectItem value="atrasado">Atrasado</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <Card className="border-border/50 overflow-hidden">
             <CardContent className="p-0">

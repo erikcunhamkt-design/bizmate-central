@@ -10,8 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { UserPlus, Search, Mail, MessageCircle, Eye, Pencil, Trash2 } from "lucide-react";
+import { UserPlus, Search, Mail, MessageCircle, Eye, Trash2, Users, SortAsc, SortDesc } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { CustomerDetail } from "@/components/CustomerDetail";
 import { motion } from "framer-motion";
@@ -23,6 +24,8 @@ export default function Clientes() {
   const [searchParams] = useSearchParams();
   const [open, setOpen] = useState(searchParams.get("novo") === "1");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [nome, setNome] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [email, setEmail] = useState("");
@@ -72,18 +75,38 @@ export default function Clientes() {
     onError: () => toast({ title: "Erro ao excluir cliente. Verifique se não há vendas vinculadas.", variant: "destructive" }),
   });
 
-  const filtered = customers.filter(c =>
-    c.nome.toLowerCase().includes(search.toLowerCase()) ||
-    c.whatsapp?.includes(search) ||
-    c.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = customers
+    .filter(c => {
+      const matchSearch = c.nome.toLowerCase().includes(search.toLowerCase()) ||
+        c.whatsapp?.includes(search) ||
+        c.email?.toLowerCase().includes(search.toLowerCase());
+      const matchStatus = statusFilter === "todos" || c.status === statusFilter;
+      return matchSearch && matchStatus;
+    })
+    .sort((a, b) => sortDir === "asc" ? a.nome.localeCompare(b.nome) : b.nome.localeCompare(a.nome));
+
+  const totalAtivos = customers.filter(c => c.status === "ativo").length;
+  const totalInativos = customers.filter(c => c.status === "inativo").length;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Clientes</h1>
-          <p className="text-sm text-muted-foreground">{customers.length} clientes cadastrados</p>
+          <div className="flex items-center gap-3 mt-1">
+            <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Users className="h-3.5 w-3.5" />
+              <span className="font-semibold text-foreground">{customers.length}</span> cadastrados
+            </span>
+            <span className="text-xs text-muted-foreground">•</span>
+            <span className="text-xs text-success font-medium">{totalAtivos} ativos</span>
+            {totalInativos > 0 && (
+              <>
+                <span className="text-xs text-muted-foreground">•</span>
+                <span className="text-xs text-muted-foreground">{totalInativos} inativos</span>
+              </>
+            )}
+          </div>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -110,9 +133,25 @@ export default function Clientes() {
         </Dialog>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar por nome, telefone ou email..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-10 bg-card border-border/50" />
+      {/* Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Buscar por nome, telefone ou email..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-10 bg-card border-border/50" />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-36 h-10 bg-card border-border/50">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="ativo">Ativos</SelectItem>
+            <SelectItem value="inativo">Inativos</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => setSortDir(d => d === "asc" ? "desc" : "asc")} title={sortDir === "asc" ? "A → Z" : "Z → A"}>
+          {sortDir === "asc" ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
+        </Button>
       </div>
 
       <Card className="border-border/50 overflow-hidden">
@@ -181,7 +220,6 @@ export default function Clientes() {
         </CardContent>
       </Card>
 
-      {/* Delete Confirm Dialog */}
       <Dialog open={!!deleteConfirm} onOpenChange={(v) => { if (!v) setDeleteConfirm(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Excluir Cliente</DialogTitle></DialogHeader>
