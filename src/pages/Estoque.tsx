@@ -8,12 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/lib/currency";
-import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2, TrendingUp, TrendingDown, BarChart3, Archive } from "lucide-react";
+import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2, TrendingUp, TrendingDown, BarChart3, Archive, FileDown, FileSpreadsheet, History } from "lucide-react";
 import { motion } from "framer-motion";
 import { PaginationControls } from "@/components/PaginationControls";
 import { ProductForm } from "@/components/ProductForm";
+import { StockMovementHistory } from "@/components/StockMovementHistory";
+import { exportEstoqueCSV, exportEstoquePDF } from "@/lib/exportEstoque";
 
 const PAGE_SIZE = 15;
 
@@ -137,6 +140,8 @@ export default function Estoque() {
     { label: "Margem Média", value: `${avgMargem.toFixed(1)}%`, icon: BarChart3, color: avgMargem >= 30 ? "text-success" : "text-warning" },
   ];
 
+  const [activeTab, setActiveTab] = useState("produtos");
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Header */}
@@ -149,22 +154,30 @@ export default function Estoque() {
             {zeroStockCount > 0 && <span className="text-destructive font-semibold ml-1">• {zeroStockCount} zerado</span>}
           </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-2 gradient-primary shadow-glow"><Plus className="h-4 w-4" />Novo Produto</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-                  <PackageIcon className="h-4 w-4 text-primary-foreground" />
-                </div>
-                Novo Produto
-              </DialogTitle>
-            </DialogHeader>
-            <ProductForm data={form} setData={setForm} onSave={() => createMutation.mutate()} isPending={createMutation.isPending} buttonLabel="Criar Produto" />
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => exportEstoquePDF(filtered)}>
+            <FileDown className="h-3.5 w-3.5" />PDF
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => exportEstoqueCSV(filtered)}>
+            <FileSpreadsheet className="h-3.5 w-3.5" />Excel
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="gap-2 gradient-primary shadow-glow"><Plus className="h-4 w-4" />Novo Produto</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
+                    <PackageIcon className="h-4 w-4 text-primary-foreground" />
+                  </div>
+                  Novo Produto
+                </DialogTitle>
+              </DialogHeader>
+              <ProductForm data={form} setData={setForm} onSave={() => createMutation.mutate()} isPending={createMutation.isPending} buttonLabel="Criar Produto" />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -184,108 +197,122 @@ export default function Estoque() {
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nome, categoria ou SKU..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9 h-10 bg-card border-border/50" />
-        </div>
-        {categories.length > 0 && (
-          <Select value={categoryFilter} onValueChange={v => { setCategoryFilter(v); setPage(1); }}>
-            <SelectTrigger className="w-40 h-10 bg-card border-border/50"><SelectValue placeholder="Categoria" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todas categorias</SelectItem>
-              {categories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
-        <Select value={stockFilter} onValueChange={v => { setStockFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-36 h-10 bg-card border-border/50"><SelectValue placeholder="Estoque" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todo estoque</SelectItem>
-            <SelectItem value="normal">Normal</SelectItem>
-            <SelectItem value="baixo">Estoque baixo</SelectItem>
-            <SelectItem value="zerado">Zerado</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="produtos" className="gap-1.5"><PackageIcon className="h-3.5 w-3.5" />Produtos</TabsTrigger>
+          <TabsTrigger value="movimentacoes" className="gap-1.5"><History className="h-3.5 w-3.5" />Movimentações</TabsTrigger>
+        </TabsList>
 
-      {/* Table */}
-      <Card className="border-border/50 overflow-hidden">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="font-semibold">Produto</TableHead>
-                <TableHead className="font-semibold">Custo</TableHead>
-                <TableHead className="font-semibold">Preço</TableHead>
-                <TableHead className="font-semibold">Margem</TableHead>
-                <TableHead className="font-semibold">Estoque</TableHead>
-                <TableHead className="w-20 text-right font-semibold">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">Carregando...</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
-              ) : paginated.map(p => {
-                const margem = calcMargem(p.custo_unitario, p.preco_padrao);
-                const lowStock = p.estoque_atual <= p.alerta_estoque_minimo;
-                const zeroStock = p.estoque_atual === 0;
-                return (
-                  <TableRow key={p.id} className="hover:bg-primary/5 transition-colors group">
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        {p.foto_url ? (
-                          <img src={p.foto_url} alt={p.nome} className="w-10 h-10 rounded-lg object-cover border border-border/50 shrink-0" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                            <PackageIcon className="h-4 w-4 text-primary" />
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="font-semibold text-sm truncate">{p.nome}</p>
-                          <div className="flex items-center gap-2">
-                            {p.categoria && <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{p.categoria}</span>}
-                            {p.sku && <span className="text-[11px] text-muted-foreground">SKU: {p.sku}</span>}
-                          </div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{formatBRL(p.custo_unitario)}</TableCell>
-                    <TableCell className="text-sm font-semibold">{formatBRL(p.preco_padrao)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        {margem >= 30 ? <TrendingUp className="h-3.5 w-3.5 text-success" /> : <TrendingDown className="h-3.5 w-3.5 text-warning" />}
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
-                          margem >= 30 ? "bg-success/10 text-success" : margem >= 15 ? "bg-warning/10 text-warning" : "bg-destructive/10 text-destructive"
-                        }`}>{margem.toFixed(1)}%</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-semibold ${zeroStock ? "text-destructive" : lowStock ? "text-warning" : ""}`}>
-                          {p.estoque_atual}
-                        </span>
-                        {zeroStock && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-destructive/10 text-destructive">ZERADO</span>}
-                        {lowStock && !zeroStock && <AlertTriangle className="h-3.5 w-3.5 text-warning" />}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm(p.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                      </div>
-                    </TableCell>
+        <TabsContent value="produtos" className="space-y-4 mt-4">
+          {/* Filters */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar por nome, categoria ou SKU..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9 h-10 bg-card border-border/50" />
+            </div>
+            {categories.length > 0 && (
+              <Select value={categoryFilter} onValueChange={v => { setCategoryFilter(v); setPage(1); }}>
+                <SelectTrigger className="w-40 h-10 bg-card border-border/50"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todas categorias</SelectItem>
+                  {categories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+            <Select value={stockFilter} onValueChange={v => { setStockFilter(v); setPage(1); }}>
+              <SelectTrigger className="w-36 h-10 bg-card border-border/50"><SelectValue placeholder="Estoque" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todo estoque</SelectItem>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="baixo">Estoque baixo</SelectItem>
+                <SelectItem value="zerado">Zerado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Table */}
+          <Card className="border-border/50 overflow-hidden">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="font-semibold">Produto</TableHead>
+                    <TableHead className="font-semibold">Custo</TableHead>
+                    <TableHead className="font-semibold">Preço</TableHead>
+                    <TableHead className="font-semibold">Margem</TableHead>
+                    <TableHead className="font-semibold">Estoque</TableHead>
+                    <TableHead className="w-20 text-right font-semibold">Ações</TableHead>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          <PaginationControls currentPage={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">Carregando...</TableCell></TableRow>
+                  ) : filtered.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
+                  ) : paginated.map(p => {
+                    const margem = calcMargem(p.custo_unitario, p.preco_padrao);
+                    const lowStock = p.estoque_atual <= p.alerta_estoque_minimo;
+                    const zeroStock = p.estoque_atual === 0;
+                    return (
+                      <TableRow key={p.id} className="hover:bg-primary/5 transition-colors group">
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            {p.foto_url ? (
+                              <img src={p.foto_url} alt={p.nome} className="w-10 h-10 rounded-lg object-cover border border-border/50 shrink-0" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                <PackageIcon className="h-4 w-4 text-primary" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm truncate">{p.nome}</p>
+                              <div className="flex items-center gap-2">
+                                {p.categoria && <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{p.categoria}</span>}
+                                {p.sku && <span className="text-[11px] text-muted-foreground">SKU: {p.sku}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{formatBRL(p.custo_unitario)}</TableCell>
+                        <TableCell className="text-sm font-semibold">{formatBRL(p.preco_padrao)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            {margem >= 30 ? <TrendingUp className="h-3.5 w-3.5 text-success" /> : <TrendingDown className="h-3.5 w-3.5 text-warning" />}
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                              margem >= 30 ? "bg-success/10 text-success" : margem >= 15 ? "bg-warning/10 text-warning" : "bg-destructive/10 text-destructive"
+                            }`}>{margem.toFixed(1)}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-semibold ${zeroStock ? "text-destructive" : lowStock ? "text-warning" : ""}`}>
+                              {p.estoque_atual}
+                            </span>
+                            {zeroStock && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-destructive/10 text-destructive">ZERADO</span>}
+                            {lowStock && !zeroStock && <AlertTriangle className="h-3.5 w-3.5 text-warning" />}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm(p.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <PaginationControls currentPage={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="movimentacoes" className="mt-4">
+          <StockMovementHistory products={products} />
+        </TabsContent>
+      </Tabs>
 
       {/* Edit Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={(v) => { if (!v) setEditingProduct(null); }}>

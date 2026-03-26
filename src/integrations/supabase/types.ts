@@ -349,6 +349,50 @@ export type Database = {
           },
         ]
       }
+      stock_movements: {
+        Row: {
+          created_at: string
+          estoque_anterior: number
+          estoque_posterior: number
+          id: string
+          motivo: string | null
+          product_id: string
+          quantidade: number
+          tipo: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          estoque_anterior: number
+          estoque_posterior: number
+          id?: string
+          motivo?: string | null
+          product_id: string
+          quantidade: number
+          tipo: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          estoque_anterior?: number
+          estoque_posterior?: number
+          id?: string
+          motivo?: string | null
+          product_id?: string
+          quantidade?: number
+          tipo?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
