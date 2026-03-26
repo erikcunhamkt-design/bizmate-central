@@ -277,5 +277,3 @@ export default function Clientes() {
     </motion.div>
   );
 }
-  );
-}
