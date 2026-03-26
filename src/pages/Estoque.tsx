@@ -13,6 +13,9 @@ import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/lib/currency";
 import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { PaginationControls } from "@/components/PaginationControls";
+
+const PAGE_SIZE = 15;
 
 const emptyForm = { nome: "", custo_unitario: "", preco_padrao: "", estoque_atual: "", alerta_estoque_minimo: "5", categoria: "", sku: "" };
 
