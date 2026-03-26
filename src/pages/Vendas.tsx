@@ -17,6 +17,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
+import { PaginationControls } from "@/components/PaginationControls";
+
+const PAGE_SIZE = 15;
 
 interface CartItem {
   product_id: string;
@@ -42,6 +45,8 @@ export default function Vendas() {
   const [salesDateFrom, setSalesDateFrom] = useState("");
   const [salesDateTo, setSalesDateTo] = useState("");
   const [installmentStatusFilter, setInstallmentStatusFilter] = useState("todos");
+  const [salesPage, setSalesPage] = useState(1);
+  const [installmentsPage, setInstallmentsPage] = useState(1);
 
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [formaPagamento, setFormaPagamento] = useState("pix");
@@ -239,6 +244,9 @@ export default function Vendas() {
     return matchSearch && matchStatus;
   });
 
+  const paginatedSales = filteredSales.slice((salesPage - 1) * PAGE_SIZE, salesPage * PAGE_SIZE);
+  const paginatedInstallments = filteredInstallments.slice((installmentsPage - 1) * PAGE_SIZE, installmentsPage * PAGE_SIZE);
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex items-center justify-between">
@@ -307,7 +315,7 @@ export default function Vendas() {
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filteredSales.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma venda encontrada</TableCell></TableRow>
-                  ) : filteredSales.map(s => (
+                  ) : paginatedSales.map(s => (
                     <TableRow key={s.id} className="hover:bg-primary/5 transition-colors">
                       <TableCell className="text-sm">{format(new Date(s.data_compra), "dd/MM/yyyy")}</TableCell>
                       <TableCell className="font-semibold text-sm">{(s as any).customers?.nome ?? "—"}</TableCell>
@@ -318,6 +326,7 @@ export default function Vendas() {
                   ))}
                 </TableBody>
               </Table>
+              <PaginationControls currentPage={salesPage} totalItems={filteredSales.length} pageSize={PAGE_SIZE} onPageChange={setSalesPage} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -356,7 +365,7 @@ export default function Vendas() {
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filteredInstallments.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma parcela encontrada</TableCell></TableRow>
-                  ) : filteredInstallments.map(i => (
+                  ) : paginatedInstallments.map(i => (
                     <TableRow key={i.id} className="hover:bg-primary/5 transition-colors">
                       <TableCell>
                         {editingInstallment?.id === i.id ? (
@@ -402,6 +411,7 @@ export default function Vendas() {
                   ))}
                 </TableBody>
               </Table>
+              <PaginationControls currentPage={installmentsPage} totalItems={filteredInstallments.length} pageSize={PAGE_SIZE} onPageChange={setInstallmentsPage} />
             </CardContent>
           </Card>
         </TabsContent>

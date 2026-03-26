@@ -13,6 +13,9 @@ import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/lib/currency";
 import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { PaginationControls } from "@/components/PaginationControls";
+
+const PAGE_SIZE = 15;
 
 const emptyForm = { nome: "", custo_unitario: "", preco_padrao: "", estoque_atual: "", alerta_estoque_minimo: "5", categoria: "", sku: "" };
 
@@ -27,6 +30,7 @@ export default function Estoque() {
   const [form, setForm] = useState(emptyForm);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ["products", user?.id],
@@ -98,6 +102,7 @@ export default function Estoque() {
     return matchSearch && matchCategory && matchStock;
   });
 
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const calcMargem = (custo: number, preco: number) => preco === 0 ? 0 : ((preco - custo) / preco * 100);
   const lowStockCount = products.filter(p => p.estoque_atual <= p.alerta_estoque_minimo).length;
 
@@ -201,7 +206,7 @@ export default function Estoque() {
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
-              ) : filtered.map(p => {
+              ) : paginated.map(p => {
                 const margem = calcMargem(p.custo_unitario, p.preco_padrao);
                 const lowStock = p.estoque_atual <= p.alerta_estoque_minimo;
                 return (
@@ -244,6 +249,7 @@ export default function Estoque() {
               })}
             </TableBody>
           </Table>
+          <PaginationControls currentPage={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
         </CardContent>
       </Card>
 

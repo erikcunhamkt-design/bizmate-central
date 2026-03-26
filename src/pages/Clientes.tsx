@@ -15,7 +15,11 @@ import { useToast } from "@/hooks/use-toast";
 import { UserPlus, Search, Mail, MessageCircle, Eye, Trash2, Users, SortAsc, SortDesc } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { CustomerDetail } from "@/components/CustomerDetail";
+import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
+import { PaginationControls } from "@/components/PaginationControls";
 import { motion } from "framer-motion";
+
+const PAGE_SIZE = 15;
 
 export default function Clientes() {
   const { user } = useAuth();
@@ -26,12 +30,14 @@ export default function Clientes() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
   const [nome, setNome] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [email, setEmail] = useState("");
   const [cpf, setCpf] = useState("");
   const [endereco, setEndereco] = useState("");
   const [obs, setObs] = useState("");
+  const [fotoUrl, setFotoUrl] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; nome: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
@@ -49,7 +55,7 @@ export default function Clientes() {
     mutationFn: async () => {
       const { error } = await supabase.from("customers").insert({
         nome, whatsapp: whatsapp || null, email: email || null, observacoes: obs || null,
-        cpf: cpf || null, endereco: endereco || null, user_id: user!.id,
+        cpf: cpf || null, endereco: endereco || null, foto_url: fotoUrl || null, user_id: user!.id,
       } as any);
       if (error) throw error;
     },
@@ -57,7 +63,7 @@ export default function Clientes() {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       toast({ title: "Cliente criado com sucesso!" });
       setOpen(false);
-      setNome(""); setWhatsapp(""); setEmail(""); setObs(""); setCpf(""); setEndereco("");
+      setNome(""); setWhatsapp(""); setEmail(""); setObs(""); setCpf(""); setEndereco(""); setFotoUrl("");
     },
     onError: () => toast({ title: "Erro ao criar cliente", variant: "destructive" }),
   });
@@ -72,21 +78,25 @@ export default function Clientes() {
       toast({ title: "Cliente excluído!" });
       setDeleteConfirm(null);
     },
-    onError: () => toast({ title: "Erro ao excluir cliente. Verifique se não há vendas vinculadas.", variant: "destructive" }),
+    onError: () => toast({ title: "Erro ao excluir. Verifique vendas vinculadas.", variant: "destructive" }),
   });
 
   const filtered = customers
     .filter(c => {
       const matchSearch = c.nome.toLowerCase().includes(search.toLowerCase()) ||
-        c.whatsapp?.includes(search) ||
-        c.email?.toLowerCase().includes(search.toLowerCase());
+        c.whatsapp?.includes(search) || c.email?.toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === "todos" || c.status === statusFilter;
       return matchSearch && matchStatus;
     })
     .sort((a, b) => sortDir === "asc" ? a.nome.localeCompare(b.nome) : b.nome.localeCompare(a.nome));
 
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const totalAtivos = customers.filter(c => c.status === "ativo").length;
   const totalInativos = customers.filter(c => c.status === "inativo").length;
+
+  // Reset page when filters change
+  const handleSearchChange = (v: string) => { setSearch(v); setPage(1); };
+  const handleStatusChange = (v: string) => { setStatusFilter(v); setPage(1); };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -112,9 +122,10 @@ export default function Clientes() {
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2 gradient-primary shadow-glow"><UserPlus className="h-4 w-4" />Novo Cliente</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader>
             <div className="space-y-4">
+              <CustomerPhotoUpload currentUrl={fotoUrl || null} onUpload={setFotoUrl} onRemove={() => setFotoUrl("")} />
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5"><Label>Nome *</Label><Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do cliente" className="h-10" /></div>
                 <div className="space-y-1.5"><Label>CPF</Label><Input value={cpf} onChange={e => setCpf(e.target.value)} placeholder="000.000.000-00" className="h-10" /></div>
@@ -133,16 +144,13 @@ export default function Clientes() {
         </Dialog>
       </div>
 
-      {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nome, telefone ou email..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-10 bg-card border-border/50" />
+          <Input placeholder="Buscar por nome, telefone ou email..." value={search} onChange={e => handleSearchChange(e.target.value)} className="pl-9 h-10 bg-card border-border/50" />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-36 h-10 bg-card border-border/50">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
+        <Select value={statusFilter} onValueChange={handleStatusChange}>
+          <SelectTrigger className="w-36 h-10 bg-card border-border/50"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos</SelectItem>
             <SelectItem value="ativo">Ativos</SelectItem>
@@ -168,9 +176,9 @@ export default function Clientes() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
+              ) : paginated.length === 0 ? (
                 <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Nenhum cliente encontrado</TableCell></TableRow>
-              ) : filtered.map(c => (
+              ) : paginated.map(c => (
                 <TableRow key={c.id} className="cursor-pointer hover:bg-primary/5 transition-colors group" onClick={() => setSelectedCustomer({ id: c.id, nome: c.nome })}>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -217,13 +225,14 @@ export default function Clientes() {
               ))}
             </TableBody>
           </Table>
+          <PaginationControls currentPage={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
         </CardContent>
       </Card>
 
       <Dialog open={!!deleteConfirm} onOpenChange={(v) => { if (!v) setDeleteConfirm(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Excluir Cliente</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.</p>
+          <p className="text-sm text-muted-foreground">Tem certeza que deseja excluir este cliente?</p>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancelar</Button>
             <Button variant="destructive" disabled={deleteMutation.isPending} onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm)}>
