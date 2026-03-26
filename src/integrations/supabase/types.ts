@@ -22,6 +22,8 @@ export type Database = {
           descricao: string | null
           hora: string | null
           id: string
+          recorrencia: string | null
+          recorrencia_fim: string | null
           titulo: string
           user_id: string
         }
@@ -32,6 +34,8 @@ export type Database = {
           descricao?: string | null
           hora?: string | null
           id?: string
+          recorrencia?: string | null
+          recorrencia_fim?: string | null
           titulo: string
           user_id: string
         }
@@ -42,6 +46,8 @@ export type Database = {
           descricao?: string | null
           hora?: string | null
           id?: string
+          recorrencia?: string | null
+          recorrencia_fim?: string | null
           titulo?: string
           user_id?: string
         }
