@@ -249,6 +249,7 @@ export default function Estoque() {
               })}
             </TableBody>
           </Table>
+          <PaginationControls currentPage={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
         </CardContent>
       </Card>
 
