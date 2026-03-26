@@ -244,6 +244,9 @@ export default function Vendas() {
     return matchSearch && matchStatus;
   });
 
+  const paginatedSales = filteredSales.slice((salesPage - 1) * PAGE_SIZE, salesPage * PAGE_SIZE);
+  const paginatedInstallments = filteredInstallments.slice((installmentsPage - 1) * PAGE_SIZE, installmentsPage * PAGE_SIZE);
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex items-center justify-between">
