@@ -30,6 +30,7 @@ export default function Estoque() {
   const [form, setForm] = useState(emptyForm);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ["products", user?.id],
