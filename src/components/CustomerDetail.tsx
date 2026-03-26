@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { formatBRL } from "@/lib/currency";
 import { format, differenceInDays } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,9 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/StatusBadge";
+import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
 import { useToast } from "@/hooks/use-toast";
 import {
-  ShoppingCart, CheckCircle, AlertTriangle, Package, MapPin, User, Camera,
+  ShoppingCart, CheckCircle, AlertTriangle, Package, MapPin, User,
   Clock, CalendarDays, Pencil, X, Save
 } from "lucide-react";
 
@@ -97,11 +97,9 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     }
   };
 
+  const salesWithInstallments = new Set(installments.map(i => i.sale_id));
   const totalComprado = sales.reduce((s, sale) => s + sale.total_venda, 0);
   const totalPago = installments.filter(i => i.status === "pago").reduce((s, i) => s + (i.pago_valor ?? i.valor_parcela), 0);
-  const vendasAVista = sales.filter(s => s.forma_pagamento !== "parcelado" || !installments.some(i => i.sale_id === s.id)).reduce((s, sale) => s + sale.total_venda, 0) - sales.filter(s => installments.some(i => i.sale_id === s.id)).reduce((s, sale) => s + sale.total_venda, 0) + sales.reduce((s, sale) => s + sale.total_venda, 0);
-  // Simplified: total paid = installments paid + sales without installments
-  const salesWithInstallments = new Set(installments.map(i => i.sale_id));
   const vendasSemParcela = sales.filter(s => !salesWithInstallments.has(s.id)).reduce((s, sale) => s + sale.total_venda, 0);
   const totalPagoGeral = totalPago + vendasSemParcela;
   const totalDevendo = installments.filter(i => i.status === "pendente").reduce((s, i) => s + i.valor_parcela, 0);
@@ -162,10 +160,14 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
           </div>
         </DialogHeader>
 
-        {/* Edit Form */}
         {editing && (
           <Card className="border-border/50">
             <CardContent className="pt-4 space-y-3">
+              <CustomerPhotoUpload
+                currentUrl={editForm.foto_url || null}
+                onUpload={(url) => setEditForm(f => ({ ...f, foto_url: url }))}
+                onRemove={() => setEditForm(f => ({ ...f, foto_url: "" }))}
+              />
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1"><Label className="text-xs">Nome *</Label><Input value={editForm.nome} onChange={e => setEditForm(f => ({ ...f, nome: e.target.value }))} className="h-9" /></div>
                 <div className="space-y-1"><Label className="text-xs">CPF</Label><Input value={editForm.cpf} onChange={e => setEditForm(f => ({ ...f, cpf: e.target.value }))} placeholder="000.000.000-00" className="h-9" /></div>
@@ -175,7 +177,6 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                 <div className="space-y-1"><Label className="text-xs">Email</Label><Input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} className="h-9" /></div>
               </div>
               <div className="space-y-1"><Label className="text-xs">Endereço</Label><Input value={editForm.endereco} onChange={e => setEditForm(f => ({ ...f, endereco: e.target.value }))} placeholder="Rua, nº, bairro, cidade" className="h-9" /></div>
-              <div className="space-y-1"><Label className="text-xs">URL da Foto</Label><Input value={editForm.foto_url} onChange={e => setEditForm(f => ({ ...f, foto_url: e.target.value }))} placeholder="https://..." className="h-9" /></div>
               <div className="space-y-1"><Label className="text-xs">Observações</Label><Textarea value={editForm.observacoes} onChange={e => setEditForm(f => ({ ...f, observacoes: e.target.value }))} className="resize-none" rows={2} /></div>
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" size="sm" onClick={() => setEditing(false)}><X className="h-3.5 w-3.5 mr-1" />Cancelar</Button>
@@ -187,7 +188,6 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
           </Card>
         )}
 
-        {/* Customer Info */}
         {!editing && customer && (
           <div className="grid grid-cols-2 gap-2 text-sm">
             {(customer as any).cpf && (
@@ -215,7 +215,6 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
           </div>
         )}
 
-        {/* KPIs */}
         <div className="grid grid-cols-3 gap-3">
           {[
             { label: "Total Comprado", value: totalComprado, icon: ShoppingCart, color: "text-primary", bg: "bg-primary/10" },
@@ -236,7 +235,6 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
           ))}
         </div>
 
-        {/* Overdue Alert */}
         {isOverdue && (
           <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
             <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
@@ -247,7 +245,6 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
           </div>
         )}
 
-        {/* Inactive Alert */}
         {isInactive && !isOverdue && (
           <div className="flex items-center gap-3 bg-warning/10 border border-warning/20 rounded-xl px-4 py-3">
             <Clock className="h-5 w-5 text-warning shrink-0" />
@@ -258,7 +255,6 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
           </div>
         )}
 
-        {/* Produtos comprados */}
         {productsList.length > 0 && (
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
@@ -266,13 +262,11 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
             </h3>
             <div className="border border-border/50 rounded-xl overflow-hidden">
               <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs font-semibold">Produto</TableHead>
-                    <TableHead className="text-right text-xs font-semibold">Qtd</TableHead>
-                    <TableHead className="text-right text-xs font-semibold">Total</TableHead>
-                  </TableRow>
-                </TableHeader>
+                <TableHeader><TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs font-semibold">Produto</TableHead>
+                  <TableHead className="text-right text-xs font-semibold">Qtd</TableHead>
+                  <TableHead className="text-right text-xs font-semibold">Total</TableHead>
+                </TableRow></TableHeader>
                 <TableBody>
                   {productsList.map((p, idx) => (
                     <TableRow key={idx} className="hover:bg-primary/5">
@@ -287,7 +281,6 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
           </div>
         )}
 
-        {/* Histórico de vendas */}
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
             <ShoppingCart className="h-3.5 w-3.5" /> Histórico de Vendas
@@ -297,14 +290,12 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
           ) : (
             <div className="border border-border/50 rounded-xl overflow-hidden">
               <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs font-semibold">Data</TableHead>
-                    <TableHead className="text-xs font-semibold">Total</TableHead>
-                    <TableHead className="text-xs font-semibold">Pagamento</TableHead>
-                    <TableHead className="text-xs font-semibold">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
+                <TableHeader><TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs font-semibold">Data</TableHead>
+                  <TableHead className="text-xs font-semibold">Total</TableHead>
+                  <TableHead className="text-xs font-semibold">Pagamento</TableHead>
+                  <TableHead className="text-xs font-semibold">Status</TableHead>
+                </TableRow></TableHeader>
                 <TableBody>
                   {sales.map(s => (
                     <TableRow key={s.id} className="hover:bg-primary/5">
@@ -320,20 +311,17 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
           )}
         </div>
 
-        {/* Parcelas */}
         {installments.length > 0 && (
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Parcelas</h3>
             <div className="border border-border/50 rounded-xl overflow-hidden">
               <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs font-semibold">Vencimento</TableHead>
-                    <TableHead className="text-xs font-semibold">Parcela</TableHead>
-                    <TableHead className="text-xs font-semibold">Valor</TableHead>
-                    <TableHead className="text-xs font-semibold">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
+                <TableHeader><TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs font-semibold">Vencimento</TableHead>
+                  <TableHead className="text-xs font-semibold">Parcela</TableHead>
+                  <TableHead className="text-xs font-semibold">Valor</TableHead>
+                  <TableHead className="text-xs font-semibold">Status</TableHead>
+                </TableRow></TableHeader>
                 <TableBody>
                   {installments.map(i => (
                     <TableRow key={i.id} className={`hover:bg-primary/5 ${i.status === "pendente" && new Date(i.vencimento_data) < today ? "bg-destructive/5" : ""}`}>
