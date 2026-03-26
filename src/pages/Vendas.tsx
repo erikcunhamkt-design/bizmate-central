@@ -315,7 +315,7 @@ export default function Vendas() {
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filteredSales.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma venda encontrada</TableCell></TableRow>
-                  ) : filteredSales.map(s => (
+                  ) : paginatedSales.map(s => (
                     <TableRow key={s.id} className="hover:bg-primary/5 transition-colors">
                       <TableCell className="text-sm">{format(new Date(s.data_compra), "dd/MM/yyyy")}</TableCell>
                       <TableCell className="font-semibold text-sm">{(s as any).customers?.nome ?? "—"}</TableCell>
@@ -326,6 +326,7 @@ export default function Vendas() {
                   ))}
                 </TableBody>
               </Table>
+              <PaginationControls currentPage={salesPage} totalItems={filteredSales.length} pageSize={PAGE_SIZE} onPageChange={setSalesPage} />
             </CardContent>
           </Card>
         </TabsContent>
