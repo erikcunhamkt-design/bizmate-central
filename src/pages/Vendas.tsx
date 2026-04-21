@@ -61,7 +61,7 @@ export default function Vendas() {
   const [manualTotal, setManualTotal] = useState("");
   const [editingInstallment, setEditingInstallment] = useState<{ id: string; valor: string; vencimento: string } | null>(null);
   const [editingSale, setEditingSale] = useState<{ id: string; customer_id: string; total: string; forma_pagamento: string; data_compra: string } | null>(null);
-  const [pendingDeleteSale, setPendingDeleteSale] = useState<(typeof sales)[number] | null>(null);
+  const [pendingDeleteSale, setPendingDeleteSale] = useState<any | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
 
   const { data: sales = [], isLoading: salesLoading } = useQuery({
