@@ -15,7 +15,7 @@ import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
 import { useToast } from "@/hooks/use-toast";
 import {
   ShoppingCart, CheckCircle, AlertTriangle, Package, MapPin, User,
-  Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX
+  Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX, CreditCard
 } from "lucide-react";
 
 interface CustomerDetailProps {
