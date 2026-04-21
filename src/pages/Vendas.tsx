@@ -601,15 +601,17 @@ export default function Vendas() {
                     <TableHead className="font-semibold">Cliente</TableHead>
                     <TableHead className="font-semibold">Parcela</TableHead>
                     <TableHead className="font-semibold">Valor</TableHead>
+                    <TableHead className="font-semibold">Recebido</TableHead>
+                    <TableHead className="font-semibold">Falta</TableHead>
                     <TableHead className="font-semibold">Status</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {instLoading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filteredInstallments.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma parcela encontrada</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma parcela encontrada</TableCell></TableRow>
                   ) : paginatedInstallments.map(i => (
                     <TableRow key={i.id} className="hover:bg-primary/5 transition-colors">
                       <TableCell>
@@ -634,13 +636,18 @@ export default function Vendas() {
                           </div>
                         ) : <span className="text-sm font-semibold">{formatBRL(i.valor_parcela)}</span>}
                       </TableCell>
+                      <TableCell className="text-sm font-semibold text-success">{formatBRL(getPaidValue(i))}</TableCell>
+                      <TableCell className={`text-sm font-semibold ${getRemainingValue(i) > 0 ? "text-warning" : "text-muted-foreground"}`}>{formatBRL(getRemainingValue(i))}</TableCell>
                       <TableCell><StatusBadge status={i.status} vencimento={i.vencimento_data} /></TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          {i.status === "pendente" && (
+                          {i.status !== "pago" && getRemainingValue(i) > 0 && (
                             <>
-                              <Button size="sm" variant="ghost" className="gap-1 h-8 text-success hover:bg-success/10" onClick={() => markPaid.mutate(i.id)} disabled={markPaid.isPending}>
-                                <CheckCircle className="h-3.5 w-3.5" />Pagar
+                              <Button size="sm" variant="ghost" className="gap-1 h-8 text-success hover:bg-success/10" onClick={() => {
+                                setReceivingInstallment(i);
+                                setReceiveForm({ valor: String(getRemainingValue(i)), data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
+                              }} disabled={receivePayment.isPending}>
+                                <CheckCircle className="h-3.5 w-3.5" />Receber
                               </Button>
                               <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-primary/10" onClick={() => setEditingInstallment({ id: i.id, valor: String(i.valor_parcela), vencimento: i.vencimento_data })}>
                                 <Pencil className="h-3.5 w-3.5" />
