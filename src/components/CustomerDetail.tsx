@@ -97,6 +97,38 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     onError: () => toast({ title: "Erro ao alterar status", variant: "destructive" }),
   });
 
+  const markInstallmentPaidMutation = useMutation({
+    mutationFn: async (installmentId: string) => {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const installment = installments.find(i => i.id === installmentId);
+      if (!installment) throw new Error("Parcela não encontrada");
+
+      const { error } = await supabase
+        .from("installments")
+        .update({ status: "pago", pago_em: today, pago_valor: installment.valor_parcela })
+        .eq("id", installmentId);
+      if (error) throw error;
+
+      const { error: cashError } = await supabase.from("cash_movements").insert({
+        user_id: installment.user_id,
+        tipo: "entrada",
+        valor: installment.valor_parcela,
+        origem: "parcela",
+        ref_id: installmentId,
+        descricao: `Parcela ${installment.numero_parcela}/${installment.total_parcelas}`,
+        data: today,
+      });
+      if (cashError) throw cashError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customer-installments", customerId] });
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast({ title: "Parcela marcada como paga!" });
+    },
+    onError: () => toast({ title: "Erro ao pagar parcela", variant: "destructive" }),
+  });
+
   const startEdit = () => {
     if (customer) {
       setEditForm({
@@ -137,6 +169,16 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     }
   }
   const productsList = Array.from(productMap.values());
+
+  const salePaymentRows = sales.map((sale) => {
+    const saleInstallments = installments.filter(i => i.sale_id === sale.id);
+    const isInstallmentSale = sale.forma_pagamento === "parcelado" || saleInstallments.length > 0;
+    const paid = isInstallmentSale
+      ? saleInstallments.filter(i => i.status === "pago").reduce((sum, i) => sum + (i.pago_valor ?? i.valor_parcela), 0)
+      : sale.total_venda;
+    const pending = Math.max(sale.total_venda - paid, 0);
+    return { sale, paid, pending };
+  });
 
   const getStatusLabel = () => {
     if (isOverdue) return { label: `${overdue.length} parcela(s) atrasada(s)`, color: "text-destructive", bg: "bg-destructive/10", icon: AlertTriangle };
