@@ -455,6 +455,8 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                   <TableHead className="text-xs font-semibold">Vencimento</TableHead>
                   <TableHead className="text-xs font-semibold">Parcela</TableHead>
                   <TableHead className="text-xs font-semibold">Valor</TableHead>
+                  <TableHead className="text-xs font-semibold">Recebido</TableHead>
+                  <TableHead className="text-xs font-semibold">Falta</TableHead>
                   <TableHead className="text-xs font-semibold">Status</TableHead>
                   <TableHead></TableHead>
                 </TableRow></TableHeader>
@@ -464,11 +466,16 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                       <TableCell className="text-sm">{format(new Date(i.vencimento_data), "dd/MM/yyyy")}</TableCell>
                       <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-md">{i.numero_parcela}/{i.total_parcelas}</span></TableCell>
                       <TableCell className="text-sm font-semibold">{formatBRL(i.valor_parcela)}</TableCell>
+                      <TableCell className="text-sm font-semibold text-success">{formatBRL(getPaidValue(i))}</TableCell>
+                      <TableCell className={`text-sm font-semibold ${getRemainingValue(i) > 0 ? "text-warning" : "text-muted-foreground"}`}>{formatBRL(getRemainingValue(i))}</TableCell>
                       <TableCell><StatusBadge status={i.status} vencimento={i.vencimento_data} /></TableCell>
                       <TableCell>
-                        {i.status === "pendente" && (
-                          <Button size="sm" variant="ghost" className="h-8 gap-1 text-success hover:bg-success/10" onClick={() => markInstallmentPaidMutation.mutate(i.id)} disabled={markInstallmentPaidMutation.isPending}>
-                            <CheckCircle className="h-3.5 w-3.5" />Pagar
+                        {i.status !== "pago" && getRemainingValue(i) > 0 && (
+                          <Button size="sm" variant="ghost" className="h-8 gap-1 text-success hover:bg-success/10" onClick={() => {
+                            setReceivingInstallment(i);
+                            setReceiveForm({ valor: String(getRemainingValue(i)), data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
+                          }} disabled={receivePaymentMutation.isPending}>
+                            <CheckCircle className="h-3.5 w-3.5" />Receber
                           </Button>
                         )}
                       </TableCell>
