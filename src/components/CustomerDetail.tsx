@@ -124,6 +124,8 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
       queryClient.invalidateQueries({ queryKey: ["customer-installments", customerId] });
       queryClient.invalidateQueries({ queryKey: ["installments"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["monthly-sales"] });
+      queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
       toast({ title: "Parcela marcada como paga!" });
     },
     onError: () => toast({ title: "Erro ao pagar parcela", variant: "destructive" }),
