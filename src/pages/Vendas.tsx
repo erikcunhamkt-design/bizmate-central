@@ -387,15 +387,54 @@ export default function Vendas() {
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma venda encontrada</TableCell></TableRow>
                   ) : paginatedSales.map(s => (
                     <TableRow key={s.id} className="hover:bg-primary/5 transition-colors">
-                      <TableCell className="text-sm">{format(new Date(s.data_compra), "dd/MM/yyyy")}</TableCell>
-                      <TableCell className="font-semibold text-sm">{(s as any).customers?.nome ?? "—"}</TableCell>
-                      <TableCell className="font-semibold text-sm">{formatBRL(s.total_venda)}</TableCell>
-                      <TableCell><span className="capitalize text-xs bg-muted px-2 py-1 rounded-md">{s.forma_pagamento}</span></TableCell>
+                      <TableCell className="text-sm">
+                        {editingSale?.id === s.id ? <Input type="date" value={editingSale.data_compra} onChange={e => setEditingSale({ ...editingSale, data_compra: e.target.value })} className="h-8 w-36" /> : format(new Date(s.data_compra), "dd/MM/yyyy")}
+                      </TableCell>
+                      <TableCell className="font-semibold text-sm">
+                        {editingSale?.id === s.id ? (
+                          <Select value={editingSale.customer_id} onValueChange={v => setEditingSale({ ...editingSale, customer_id: v })}>
+                            <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                            <SelectContent>{customers.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}</SelectContent>
+                          </Select>
+                        ) : (s as any).customers?.nome ?? "—"}
+                      </TableCell>
+                      <TableCell className="font-semibold text-sm">
+                        {editingSale?.id === s.id ? <Input type="number" min={0.01} step="0.01" value={editingSale.total} onChange={e => setEditingSale({ ...editingSale, total: e.target.value })} className="h-8 w-28" /> : formatBRL(s.total_venda)}
+                      </TableCell>
+                      <TableCell>
+                        {editingSale?.id === s.id ? (
+                          <Select value={editingSale.forma_pagamento} onValueChange={v => setEditingSale({ ...editingSale, forma_pagamento: v })}>
+                            <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pix">PIX</SelectItem>
+                              <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                              <SelectItem value="cartao">Cartão</SelectItem>
+                              <SelectItem value="outro">Outro</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : <span className="capitalize text-xs bg-muted px-2 py-1 rounded-md">{s.forma_pagamento}</span>}
+                      </TableCell>
                       <TableCell><StatusBadge status={s.status} /></TableCell>
                       <TableCell>
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => deleteSale.mutate(s.id)} disabled={deleteSale.isPending}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex gap-1">
+                          {editingSale?.id === s.id ? (
+                            <>
+                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-success hover:bg-success/10" onClick={() => updateSale.mutate({ id: s.id, customer_id: editingSale.customer_id, total: parseFloat(editingSale.total), forma_pagamento: editingSale.forma_pagamento, data_compra: editingSale.data_compra })} disabled={updateSale.isPending}>
+                                <CheckCircle className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setEditingSale(null)}>
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          ) : (
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-primary/10" onClick={() => setEditingSale({ id: s.id, customer_id: s.customer_id, total: String(s.total_venda), forma_pagamento: s.forma_pagamento === "parcelado" ? "pix" : s.forma_pagamento, data_compra: s.data_compra })}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => deleteSale.mutate(s.id)} disabled={deleteSale.isPending}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
