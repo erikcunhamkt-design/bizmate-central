@@ -51,8 +51,10 @@ export default function Vendas() {
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [formaPagamento, setFormaPagamento] = useState("pix");
   const [parcelado, setParcelado] = useState(false);
+  const [valorTotalParcelado, setValorTotalParcelado] = useState("");
   const [valorPorParcela, setValorPorParcela] = useState("");
   const [diaPagamento, setDiaPagamento] = useState("");
+  const [quantidadeParcelas, setQuantidadeParcelas] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [addProductId, setAddProductId] = useState("");
   const [manualTotal, setManualTotal] = useState("");
@@ -144,13 +146,14 @@ export default function Vendas() {
   const createSale = useMutation({
     mutationFn: async () => {
       if (!selectedCustomer) throw new Error("Selecione um cliente");
-      const total = cart.length > 0 ? cart.reduce((s, c) => s + c.preco * c.quantidade, 0) : parseFloat(manualTotal) || 0;
+      const totalProdutos = cart.length > 0 ? cart.reduce((s, c) => s + c.preco * c.quantidade, 0) : parseFloat(manualTotal) || 0;
+      const total = parcelado ? parseFloat(valorTotalParcelado) || 0 : totalProdutos;
       if (total <= 0) throw new Error("Informe o valor da venda");
       const today = format(new Date(), "yyyy-MM-dd");
 
       const { data: sale, error: saleErr } = await supabase.from("sales").insert({
         user_id: user!.id, customer_id: selectedCustomer, total_venda: total,
-        forma_pagamento: formaPagamento, data_compra: today, status: !parcelado ? "pago" : "ativa",
+        forma_pagamento: parcelado ? "parcelado" : formaPagamento, data_compra: today, status: !parcelado ? "pago" : "ativa",
       }).select().single();
       if (saleErr) throw saleErr;
 
@@ -167,10 +170,11 @@ export default function Vendas() {
         }
       }
 
-      if (parcelado && valorPorParcela) {
+      if (parcelado) {
         const vparcela = parseFloat(valorPorParcela);
+        const numParcelas = parseInt(quantidadeParcelas);
         if (vparcela <= 0) throw new Error("Valor por parcela inválido");
-        const numParcelas = Math.ceil(total / vparcela);
+        if (!numParcelas || numParcelas <= 0) throw new Error("Informe em quantas vezes o cliente fez");
         const dia = parseInt(diaPagamento) || new Date().getDate();
         const parcelas = Array.from({ length: numParcelas }, (_, i) => {
           const venc = new Date();
@@ -178,6 +182,7 @@ export default function Vendas() {
           venc.setDate(Math.min(dia, new Date(venc.getFullYear(), venc.getMonth() + 1, 0).getDate()));
           const isLast = i === numParcelas - 1;
           const valor = isLast ? Math.round((total - vparcela * (numParcelas - 1)) * 100) / 100 : vparcela;
+          if (valor <= 0) throw new Error("Confira o total, valor da parcela e quantidade de vezes");
           return {
             user_id: user!.id, customer_id: selectedCustomer, sale_id: sale.id,
             numero_parcela: i + 1, total_parcelas: numParcelas, valor_parcela: valor,
@@ -205,7 +210,7 @@ export default function Vendas() {
 
   const resetForm = () => {
     setOpenNova(false); setSelectedCustomer(""); setFormaPagamento("pix");
-    setParcelado(false); setValorPorParcela(""); setDiaPagamento("");
+    setParcelado(false); setValorTotalParcelado(""); setValorPorParcela(""); setDiaPagamento(""); setQuantidadeParcelas("");
     setCart([]); setAddProductId(""); setManualTotal("");
   };
 
@@ -225,6 +230,38 @@ export default function Vendas() {
   const removeFromCart = (productId: string) => setCart(prev => prev.filter(c => c.product_id !== productId));
 
   const totalCart = cart.length > 0 ? cart.reduce((s, c) => s + c.preco * c.quantidade, 0) : parseFloat(manualTotal) || 0;
+  const totalVendaAtual = parcelado ? parseFloat(valorTotalParcelado) || 0 : totalCart;
+
+  const deleteSale = useMutation({
+    mutationFn: async (saleId: string) => {
+      const sale = sales.find(s => s.id === saleId);
+      if (!sale) throw new Error("Venda não encontrada");
+      const saleInstallments = installments.filter(i => i.sale_id === saleId);
+      const hasPaidInstallments = saleInstallments.some(i => i.status === "pago");
+      if ((sale.status === "pago" || hasPaidInstallments) && !window.confirm("Esta venda possui pagamento registrado. Deseja excluir a venda e os lançamentos financeiros vinculados?")) return;
+
+      const installmentIds = saleInstallments.map(i => i.id);
+      if (installmentIds.length > 0) {
+        const { error: cashInstallmentsErr } = await supabase.from("cash_movements").delete().in("ref_id", installmentIds);
+        if (cashInstallmentsErr) throw cashInstallmentsErr;
+      }
+      const { error: cashSaleErr } = await supabase.from("cash_movements").delete().eq("ref_id", saleId);
+      if (cashSaleErr) throw cashSaleErr;
+      const { error: installmentsErr } = await supabase.from("installments").delete().eq("sale_id", saleId);
+      if (installmentsErr) throw installmentsErr;
+      const { error: itemsErr } = await supabase.from("sale_items").delete().eq("sale_id", saleId);
+      if (itemsErr) throw itemsErr;
+      const { error: saleErr } = await supabase.from("sales").delete().eq("id", saleId);
+      if (saleErr) throw saleErr;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast({ title: "Venda excluída!" });
+    },
+    onError: (e) => toast({ title: "Erro ao excluir venda", description: e.message, variant: "destructive" }),
+  });
 
   // Filtered data
   const filteredSales = sales.filter(s => {
@@ -308,13 +345,14 @@ export default function Vendas() {
                     <TableHead className="font-semibold">Total</TableHead>
                     <TableHead className="font-semibold">Pagamento</TableHead>
                     <TableHead className="font-semibold">Status</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {salesLoading ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filteredSales.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma venda encontrada</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma venda encontrada</TableCell></TableRow>
                   ) : paginatedSales.map(s => (
                     <TableRow key={s.id} className="hover:bg-primary/5 transition-colors">
                       <TableCell className="text-sm">{format(new Date(s.data_compra), "dd/MM/yyyy")}</TableCell>
@@ -322,6 +360,11 @@ export default function Vendas() {
                       <TableCell className="font-semibold text-sm">{formatBRL(s.total_venda)}</TableCell>
                       <TableCell><span className="capitalize text-xs bg-muted px-2 py-1 rounded-md">{s.forma_pagamento}</span></TableCell>
                       <TableCell><StatusBadge status={s.status} /></TableCell>
+                      <TableCell>
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => deleteSale.mutate(s.id)} disabled={deleteSale.isPending}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -484,9 +527,9 @@ export default function Vendas() {
               </div>
             )}
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 opacity-100 data-[disabled=true]:opacity-50" data-disabled={parcelado}>
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Forma de Pagamento</Label>
-              <Select value={formaPagamento} onValueChange={setFormaPagamento}>
+              <Select value={formaPagamento} onValueChange={setFormaPagamento} disabled={parcelado}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pix">PIX</SelectItem>
@@ -505,22 +548,32 @@ export default function Vendas() {
             {parcelado && (
               <div className="space-y-3 p-3 rounded-xl bg-muted/30 border border-border/50">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Valor por Parcela (R$)</Label>
+                  <Label className="text-xs">Valor Total Parcelado (R$)</Label>
+                  <Input type="number" min={0.01} step="0.01" placeholder="Ex: 900.00" value={valorTotalParcelado} onChange={e => setValorTotalParcelado(e.target.value)} className="h-10" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Valor da Parcela (R$)</Label>
                   <Input type="number" min={1} step="0.01" placeholder="Ex: 150.00" value={valorPorParcela} onChange={e => setValorPorParcela(e.target.value)} className="h-10" />
-                  {parseFloat(valorPorParcela) > 0 && totalCart > 0 && (
+                  {parseFloat(valorPorParcela) > 0 && parseInt(quantidadeParcelas) > 0 && totalVendaAtual > 0 && (
                     <p className="text-xs text-primary font-semibold">
-                      {Math.ceil(totalCart / parseFloat(valorPorParcela))}x de {formatBRL(parseFloat(valorPorParcela))}
+                      {quantidadeParcelas}x de {formatBRL(parseFloat(valorPorParcela))} • total {formatBRL(totalVendaAtual)}
                     </p>
                   )}
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Dia de Pagamento (do mês)</Label>
-                  <Input type="number" min={1} max={31} placeholder="Ex: 10" value={diaPagamento} onChange={e => setDiaPagamento(e.target.value)} className="h-10" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Dia de Pagamento</Label>
+                    <Input type="number" min={1} max={31} placeholder="Ex: 10" value={diaPagamento} onChange={e => setDiaPagamento(e.target.value)} className="h-10" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Quantas Vezes</Label>
+                    <Input type="number" min={1} placeholder="Ex: 6" value={quantidadeParcelas} onChange={e => setQuantidadeParcelas(e.target.value)} className="h-10" />
+                  </div>
                 </div>
               </div>
             )}
 
-            <Button className="w-full h-11 gradient-primary shadow-glow font-semibold" onClick={() => createSale.mutate()} disabled={createSale.isPending || !selectedCustomer}>
+            <Button className="w-full h-11 gradient-primary shadow-glow font-semibold" onClick={() => createSale.mutate()} disabled={createSale.isPending || !selectedCustomer || (parcelado && (!valorTotalParcelado || !valorPorParcela || !diaPagamento || !quantidadeParcelas))}>
               {createSale.isPending ? (
                 <div className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
               ) : "Registrar Venda"}
