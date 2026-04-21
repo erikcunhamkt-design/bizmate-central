@@ -791,6 +791,68 @@ export default function Vendas() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!receivingInstallment} onOpenChange={(open) => { if (!open) setReceivingInstallment(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
+                <CreditCard className="h-4 w-4 text-success" />
+              </div>
+              Receber pagamento
+            </DialogTitle>
+          </DialogHeader>
+          {receivingInstallment && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-2 rounded-xl border border-border/50 bg-muted/30 p-3 text-sm">
+                <div><p className="text-xs text-muted-foreground">Parcela</p><p className="font-semibold">{receivingInstallment.numero_parcela}/{receivingInstallment.total_parcelas}</p></div>
+                <div><p className="text-xs text-muted-foreground">Recebido</p><p className="font-semibold text-success">{formatBRL(getPaidValue(receivingInstallment))}</p></div>
+                <div><p className="text-xs text-muted-foreground">Falta</p><p className="font-semibold text-warning">{formatBRL(getRemainingValue(receivingInstallment))}</p></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Valor recebido</Label>
+                  <Input type="number" min={0.01} step="0.01" value={receiveForm.valor} onChange={e => setReceiveForm(f => ({ ...f, valor: e.target.value }))} className="h-10" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data</Label>
+                  <Input type="date" value={receiveForm.data} onChange={e => setReceiveForm(f => ({ ...f, data: e.target.value }))} className="h-10" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Forma de recebimento</Label>
+                <Select value={receiveForm.metodo} onValueChange={metodo => setReceiveForm(f => ({ ...f, metodo }))}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pix">PIX</SelectItem>
+                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                    <SelectItem value="cartao">Cartão</SelectItem>
+                    <SelectItem value="outro">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Observação</Label>
+                <Textarea value={receiveForm.observacoes} onChange={e => setReceiveForm(f => ({ ...f, observacoes: e.target.value }))} className="resize-none" rows={2} />
+              </div>
+              {receivingPreview.length > 0 && (
+                <div className="rounded-xl border border-border/50 overflow-hidden">
+                  <div className="px-3 py-2 bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Aplicação automática</div>
+                  {receivingPreview.map(item => (
+                    <div key={item.installment.id} className="flex items-center justify-between px-3 py-2 border-t border-border/50 text-sm">
+                      <span>Parcela {item.installment.numero_parcela}/{item.installment.total_parcelas}</span>
+                      <span className="font-semibold text-success">{formatBRL(item.amount)} — {item.statusAfter === "pago" ? "paga" : "parcial"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Button className="w-full h-11 gradient-primary shadow-glow font-semibold" onClick={() => receivePayment.mutate()} disabled={receivePayment.isPending || receivingPreview.length === 0}>
+                {receivePayment.isPending ? "Registrando..." : "Registrar recebimento"}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!pendingDeleteSale} onOpenChange={(open) => { if (!open) { setPendingDeleteSale(null); setDeleteReason(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
