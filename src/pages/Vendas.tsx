@@ -176,7 +176,7 @@ export default function Vendas() {
     mutationFn: async () => {
       if (!selectedCustomer) throw new Error("Selecione um cliente");
       const totalProdutos = cart.length > 0 ? cart.reduce((s, c) => s + c.preco * c.quantidade, 0) : parseFloat(manualTotal) || 0;
-      const total = parcelado ? parseFloat(valorTotalParcelado) || 0 : totalProdutos;
+      const total = parcelado ? (parseFloat(valorTotalParcelado) || totalProdutos) : totalProdutos;
       if (total <= 0) throw new Error("Informe o valor da venda");
       const today = format(new Date(), "yyyy-MM-dd");
 
@@ -202,13 +202,13 @@ export default function Vendas() {
       if (parcelado) {
         const vparcela = parseFloat(valorPorParcela);
         const numParcelas = parseInt(quantidadeParcelas);
+        const intervaloDias = parseInt(diaPagamento);
         if (vparcela <= 0) throw new Error("Valor por parcela inválido");
         if (!numParcelas || numParcelas <= 0) throw new Error("Informe em quantas vezes o cliente fez");
-        const dia = parseInt(diaPagamento) || new Date().getDate();
+        if (!intervaloDias || intervaloDias <= 0) throw new Error("Informe o intervalo de dias entre os vencimentos");
         const parcelas = Array.from({ length: numParcelas }, (_, i) => {
           const venc = new Date();
-          venc.setMonth(venc.getMonth() + i + 1);
-          venc.setDate(Math.min(dia, new Date(venc.getFullYear(), venc.getMonth() + 1, 0).getDate()));
+          venc.setDate(venc.getDate() + intervaloDias * (i + 1));
           const isLast = i === numParcelas - 1;
           const valor = isLast ? Math.round((total - vparcela * (numParcelas - 1)) * 100) / 100 : vparcela;
           if (valor <= 0) throw new Error("Confira o total, valor da parcela e quantidade de vezes");
@@ -218,7 +218,8 @@ export default function Vendas() {
             vencimento_data: format(venc, "yyyy-MM-dd"), status: "pendente",
           };
         });
-        await supabase.from("installments").insert(parcelas);
+        const { error: installmentsErr } = await supabase.from("installments").insert(parcelas);
+        if (installmentsErr) throw installmentsErr;
       } else {
         await supabase.from("cash_movements").insert({
           user_id: user!.id, tipo: "entrada", valor: total, origem: "venda",
@@ -679,8 +680,8 @@ export default function Vendas() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Dia de Pagamento</Label>
-                    <Input type="number" min={1} max={31} placeholder="Ex: 10" value={diaPagamento} onChange={e => setDiaPagamento(e.target.value)} className="h-10" />
+                    <Label className="text-xs">Dias de Pagamento</Label>
+                    <Input type="number" min={1} placeholder="Ex: 30" value={diaPagamento} onChange={e => setDiaPagamento(e.target.value)} className="h-10" />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Quantas Vezes</Label>
