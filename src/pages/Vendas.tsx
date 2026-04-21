@@ -680,8 +680,8 @@ export default function Vendas() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Dia de Pagamento</Label>
-                    <Input type="number" min={1} max={31} placeholder="Ex: 10" value={diaPagamento} onChange={e => setDiaPagamento(e.target.value)} className="h-10" />
+                    <Label className="text-xs">Dias de Pagamento</Label>
+                    <Input type="number" min={1} placeholder="Ex: 30" value={diaPagamento} onChange={e => setDiaPagamento(e.target.value)} className="h-10" />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Quantas Vezes</Label>
