@@ -462,7 +462,14 @@ export default function Vendas() {
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
                           )}
-                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => deleteSale.mutate(s.id)} disabled={deleteSale.isPending}>
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => {
+                            if (s.forma_pagamento !== "parcelado" && s.status === "pago") {
+                              setPendingDeleteSale(s);
+                              setDeleteReason("");
+                              return;
+                            }
+                            deleteSale.mutate({ saleId: s.id });
+                          }} disabled={deleteSale.isPending}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
