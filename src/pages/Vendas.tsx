@@ -306,17 +306,18 @@ export default function Vendas() {
   const currentMonthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
   const currentMonthEnd = format(endOfMonth(new Date()), "yyyy-MM-dd");
   const totalVendido = sales.reduce((sum, sale) => sum + sale.total_venda, 0);
-  const totalAReceberParcelado = installments.filter(i => i.status === "pendente").reduce((sum, i) => sum + i.valor_parcela, 0);
+  const totalAReceberParcelado = installments.filter(i => i.status !== "pago").reduce((sum, i) => sum + getRemainingValue(i), 0);
   const aReceberParceladoMes = installments
-    .filter(i => i.status === "pendente" && i.vencimento_data >= currentMonthStart && i.vencimento_data <= currentMonthEnd)
-    .reduce((sum, i) => sum + i.valor_parcela, 0);
+    .filter(i => i.status !== "pago" && i.vencimento_data >= currentMonthStart && i.vencimento_data <= currentMonthEnd)
+    .reduce((sum, i) => sum + getRemainingValue(i), 0);
+  const receivingPreview = receivingInstallment ? buildAllocationPreview(installments as any, receivingInstallment.id, parseFloat(receiveForm.valor) || 0) : [];
 
   const deleteSale = useMutation({
     mutationFn: async ({ saleId, reason }: { saleId: string; reason?: string }) => {
       const sale = sales.find(s => s.id === saleId);
       if (!sale) throw new Error("Venda não encontrada");
       const saleInstallments = installments.filter(i => i.sale_id === saleId);
-      const hasPaidInstallments = saleInstallments.some(i => i.status === "pago");
+      const hasPaidInstallments = saleInstallments.some(i => i.status === "pago" || i.status === "parcial");
       const isCashSaleWithLinkedEntries = sale.forma_pagamento !== "parcelado" && sale.status === "pago";
       if (isCashSaleWithLinkedEntries && !reason?.trim()) throw new Error("Informe o motivo da exclusão");
 
@@ -395,7 +396,7 @@ export default function Vendas() {
   const filteredInstallments = installments.filter(i => {
     const matchSearch = !searchTerm || (i as any).customers?.nome?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatus = installmentStatusFilter === "todos" ? true :
-      installmentStatusFilter === "atrasado" ? (i.status === "pendente" && new Date(i.vencimento_data) < new Date()) :
+      installmentStatusFilter === "atrasado" ? (i.status !== "pago" && getRemainingValue(i) > 0 && new Date(i.vencimento_data) < new Date()) :
       i.status === installmentStatusFilter;
     return matchSearch && matchStatus;
   });
