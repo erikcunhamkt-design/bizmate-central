@@ -345,13 +345,14 @@ export default function Vendas() {
                     <TableHead className="font-semibold">Total</TableHead>
                     <TableHead className="font-semibold">Pagamento</TableHead>
                     <TableHead className="font-semibold">Status</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {salesLoading ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filteredSales.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma venda encontrada</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma venda encontrada</TableCell></TableRow>
                   ) : paginatedSales.map(s => (
                     <TableRow key={s.id} className="hover:bg-primary/5 transition-colors">
                       <TableCell className="text-sm">{format(new Date(s.data_compra), "dd/MM/yyyy")}</TableCell>
@@ -359,6 +360,11 @@ export default function Vendas() {
                       <TableCell className="font-semibold text-sm">{formatBRL(s.total_venda)}</TableCell>
                       <TableCell><span className="capitalize text-xs bg-muted px-2 py-1 rounded-md">{s.forma_pagamento}</span></TableCell>
                       <TableCell><StatusBadge status={s.status} /></TableCell>
+                      <TableCell>
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => deleteSale.mutate(s.id)} disabled={deleteSale.isPending}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -521,9 +527,9 @@ export default function Vendas() {
               </div>
             )}
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 opacity-100 data-[disabled=true]:opacity-50" data-disabled={parcelado}>
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Forma de Pagamento</Label>
-              <Select value={formaPagamento} onValueChange={setFormaPagamento}>
+              <Select value={formaPagamento} onValueChange={setFormaPagamento} disabled={parcelado}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pix">PIX</SelectItem>
@@ -542,22 +548,32 @@ export default function Vendas() {
             {parcelado && (
               <div className="space-y-3 p-3 rounded-xl bg-muted/30 border border-border/50">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Valor por Parcela (R$)</Label>
+                  <Label className="text-xs">Valor Total Parcelado (R$)</Label>
+                  <Input type="number" min={0.01} step="0.01" placeholder="Ex: 900.00" value={valorTotalParcelado} onChange={e => setValorTotalParcelado(e.target.value)} className="h-10" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Valor da Parcela (R$)</Label>
                   <Input type="number" min={1} step="0.01" placeholder="Ex: 150.00" value={valorPorParcela} onChange={e => setValorPorParcela(e.target.value)} className="h-10" />
-                  {parseFloat(valorPorParcela) > 0 && totalCart > 0 && (
+                  {parseFloat(valorPorParcela) > 0 && parseInt(quantidadeParcelas) > 0 && totalVendaAtual > 0 && (
                     <p className="text-xs text-primary font-semibold">
-                      {Math.ceil(totalCart / parseFloat(valorPorParcela))}x de {formatBRL(parseFloat(valorPorParcela))}
+                      {quantidadeParcelas}x de {formatBRL(parseFloat(valorPorParcela))} • total {formatBRL(totalVendaAtual)}
                     </p>
                   )}
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Dia de Pagamento (do mês)</Label>
-                  <Input type="number" min={1} max={31} placeholder="Ex: 10" value={diaPagamento} onChange={e => setDiaPagamento(e.target.value)} className="h-10" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Dia de Pagamento</Label>
+                    <Input type="number" min={1} max={31} placeholder="Ex: 10" value={diaPagamento} onChange={e => setDiaPagamento(e.target.value)} className="h-10" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Quantas Vezes</Label>
+                    <Input type="number" min={1} placeholder="Ex: 6" value={quantidadeParcelas} onChange={e => setQuantidadeParcelas(e.target.value)} className="h-10" />
+                  </div>
                 </div>
               </div>
             )}
 
-            <Button className="w-full h-11 gradient-primary shadow-glow font-semibold" onClick={() => createSale.mutate()} disabled={createSale.isPending || !selectedCustomer}>
+            <Button className="w-full h-11 gradient-primary shadow-glow font-semibold" onClick={() => createSale.mutate()} disabled={createSale.isPending || !selectedCustomer || (parcelado && (!valorTotalParcelado || !valorPorParcela || !diaPagamento || !quantidadeParcelas))}>
               {createSale.isPending ? (
                 <div className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
               ) : "Registrar Venda"}
