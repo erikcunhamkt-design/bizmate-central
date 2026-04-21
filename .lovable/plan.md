@@ -1,112 +1,241 @@
 
+# Plano para organizar pagamentos maiores que a parcela
 
-# Gestão do Meu Negócio — Fase 1
+## Ideia principal
 
-## Visão Geral
-App web responsivo (desktop-first, mobile friendly) com tema **escuro** para gestão de negócio próprio. Backend com **Supabase** (auth + banco + edge functions). Moeda BRL, datas pt-BR, fuso America/Sao_Paulo.
+Criar um fluxo chamado **Receber pagamento** em vez de apenas “Pagar parcela”.
 
----
+Quando o cliente pagar um valor maior que a parcela atual, o app não vai “bagunçar” o valor original da venda nem apagar parcelas futuras. Ele vai registrar o dinheiro recebido e distribuir esse valor nas parcelas em aberto, mantendo histórico claro.
 
-## O que entra na Fase 1
+Exemplo:
 
-### 1. Autenticação
-- Login e cadastro com email/senha
-- Tela de redefinição de senha
-- Todas as rotas protegidas
+```text
+Venda parcelada: R$ 600 em 3x de R$ 200
 
-### 2. Banco de Dados (Supabase)
-Tabelas criadas nesta fase:
-- **customers** — dados do cliente (nome, WhatsApp, email, foto, status)
-- **products** — estoque (custo, preço, margem, alerta mínimo)
-- **sales** + **sale_items** — vendas com itens
-- **installments** — parcelas com vencimento e status
-- **expenses** — contas a pagar (com suporte a recorrência)
-- **cash_movements** — movimentações financeiras (entrada/saída)
+Parcela 1 vence em abril: R$ 200
+Cliente paga R$ 300
 
-Todas com RLS por usuário autenticado.
+Resultado:
+- Parcela 1: paga com R$ 200
+- Parcela 2: fica parcialmente abatida com R$ 100
+- Caixa do mês atual: entra R$ 300
+- A receber futuro: diminui R$ 300
+```
 
-### 3. Navegação (Sidebar)
-Sidebar colapsável com dark mode, contendo:
-- Dashboard
-- Calendário
-- Clientes
-- Vendas / Parcelas
-- Financeiro
-- Estoque
-- Contas a Pagar
-- *(Relatórios e Configurações ficam para Fase 2)*
+Assim o app separa duas coisas importantes:
 
-### 4. Dashboard
-- **6 cards KPI** do mês: Entradas, Saídas, Lucro, A Receber, A Pagar, Vence Hoje
-- **Ações rápidas**: + Novo Cliente, + Nova Venda, + Nova Conta, Registrar Pagamento
-- **Mini calendário** com lista de vencimentos do dia (parcelas e contas)
-- Clique em vencimento → detalhe com botão "Marcar como pago"
+```text
+Dinheiro recebido no mês = quando o cliente pagou
+Valor a receber = quanto ainda falta das parcelas
+```
 
-### 5. Clientes
-- **Lista** com busca e filtros (ativo/inativo, com atraso)
-- Colunas: Nome, Próximo Vencimento, Em Aberto, Status (cores)
-- **Criação rápida** (< 30 segundos)
-- **Detalhe do cliente** com:
-  - Header (foto, nome, WhatsApp, botões de ação)
-  - Resumo financeiro calculado (última compra, total comprado, total em aberto, parcelas restantes, próximo vencimento, ticket médio)
-  - Aba Compras (histórico de vendas)
-  - Aba Parcelas (com status colorido e ações)
+## Regras de negócio
 
-### 6. Vendas / Parcelas
-- **Wizard de venda** em passos:
-  1. Escolher ou criar cliente
-  2. Adicionar produtos (preço editável)
-  3. Desconto
-  4. Forma de pagamento: à vista ou parcelado (nº parcelas, data 1º vencimento, intervalo mensal)
-  5. Confirmar → gera parcelas automaticamente
-- **Tela de Parcelas**: filtros por status, período (hoje/7 dias/atrasadas), cliente
-- Ações: Marcar pago, Reagendar
-- Status com cores: 🟢 Em dia, 🟡 Vence hoje, 🔴 Atrasado, ⚪ Pago
+1. **A venda original não muda**
+   - O total vendido continua igual.
+   - As parcelas originais continuam existindo.
+   - Isso evita confusão em relatórios e histórico.
 
-### 7. Calendário (tela completa)
-- Visão mensal com eventos:
-  - Parcelas: "Cliente X — Parcela 2/6 — R$..."
-  - Contas: "Aluguel — R$..."
-- Filtros: Parcelas / Contas / Ambos, por status
-- Clique no evento → detalhe com ação rápida (marcar pago)
+2. **O pagamento maior vira abatimento**
+   - Primeiro quita a parcela selecionada.
+   - O excedente vai automaticamente para as próximas parcelas pendentes do mesmo cliente/venda, por ordem de vencimento.
 
-### 8. Estoque
-- Lista de produtos: custo, preço, margem calculada, estoque atual, alerta baixo
-- Detalhe do produto: lucro por unidade, margem %, preço mínimo de promoção (custo × 1.10 ou configurável)
-- CRUD completo
+3. **Parcela pode ter 3 estados**
+   - `pendente`: nada pago ainda.
+   - `parcial`: recebeu parte do valor, mas ainda falta.
+   - `pago`: recebeu o valor total da parcela.
 
-### 9. Contas a Pagar
-- CRUD com campos: descrição, categoria, valor, vencimento, status
-- Suporte a recorrência (mensal/semanal/anual) — gera próximas automaticamente
-- Contas aparecem no calendário
+4. **Não permitir pagar mais que o saldo em aberto**
+   - Se a venda ainda tem R$ 500 em aberto, o app não deve aceitar pagamento de R$ 600 sem aviso.
+   - Isso evita “crédito solto” sem controle.
+   - Podemos futuramente criar “saldo/crédito do cliente”, mas para agora o mais seguro é bloquear excesso acima da dívida total.
 
-### 10. Financeiro
-- Fluxo de caixa por mês (tabela de movimentações)
-- Gráfico simples: Entradas × Saídas mensal (Recharts)
-- Baseado em cash_movements gerados ao registrar pagamentos e despesas
+5. **Entrada financeira é registrada uma única vez**
+   - Se o cliente pagou R$ 300, entra apenas um lançamento de R$ 300 no caixa.
+   - Mesmo que esse valor quite uma parcela e abata outra, não devem ser criadas entradas duplicadas.
 
-### 11. Notificações — Modo 1 (sem API WhatsApp)
-- Botão "Enviar lembrete" no cliente e na parcela
-- Gera mensagem pré-formatada e abre `https://wa.me/<numero>?text=...`
-- Template: "Olá, {nome}. Hoje ({data}) vence a parcela {x}/{y} no valor de {valor}..."
+## O que será alterado na interface
 
-### 12. Lógica de Status e Alertas
-- Status automático baseado em data:
-  - Pendente + vencimento == hoje → "Vence hoje" (amarelo)
-  - Pendente + vencimento < hoje → "Atrasado" (vermelho)
-  - Pago → verde
-- Visual com badges coloridos em todas as telas
+### Em Vendas > Parcelas
 
----
+Trocar o botão atual **Pagar** por **Receber**.
 
-## O que fica para Fase 2
-- Relatórios com exportação CSV
-- Configurações (nome do negócio, margem mínima, categorias)
-- Score de risco do cliente
-- Renegociação de parcelas com log
-- Comprovante (anexar imagem/PDF no pagamento)
-- Metas do mês
-- WhatsApp Modo 2 (API oficial com agendamento automático)
-- Auditoria (log de alterações)
-- Notificação interna no app (ícone de sino)
+Ao clicar, abrir um modal com:
 
+- Cliente
+- Parcela selecionada
+- Valor da parcela
+- Valor já recebido
+- Valor restante
+- Campo: **Valor recebido**
+- Campo: **Data do pagamento**
+- Campo: **Forma de recebimento**
+- Campo opcional: **Observação**
+- Prévia automática da distribuição
+
+Exemplo da prévia:
+
+```text
+Você está recebendo R$ 300,00
+
+Aplicação:
+- Parcela 1/3: R$ 200,00 — ficará paga
+- Parcela 2/3: R$ 100,00 — ficará parcialmente paga
+
+Entrada no caixa: R$ 300,00 em 21/04/2026
+```
+
+### Na tabela de parcelas
+
+Adicionar informações mais claras:
+
+```text
+Parcela | Valor | Recebido | Falta | Status
+1/3     | 200   | 200      | 0     | Pago
+2/3     | 200   | 100      | 100   | Parcial
+3/3     | 200   | 0        | 200   | Pendente
+```
+
+### Dentro do cliente
+
+Na seção **Venda x Pagamento**, mostrar:
+
+- Total da venda
+- Total recebido
+- Total pendente
+- Progresso do pagamento
+
+E nas parcelas do cliente:
+
+- Valor original
+- Valor recebido
+- Valor faltante
+- Histórico dos pagamentos/abatimentos
+
+## Alterações técnicas
+
+### Banco de dados
+
+Criar duas tabelas novas.
+
+#### 1. `customer_payments`
+
+Guarda o pagamento real que entrou no caixa.
+
+Campos principais:
+
+- `id`
+- `user_id`
+- `customer_id`
+- `sale_id`
+- `valor_total`
+- `data_pagamento`
+- `metodo_recebimento`
+- `observacoes`
+- `created_at`
+
+#### 2. `payment_allocations`
+
+Guarda como o pagamento foi distribuído entre as parcelas.
+
+Campos principais:
+
+- `id`
+- `user_id`
+- `payment_id`
+- `installment_id`
+- `valor_aplicado`
+- `tipo`
+  - `parcela`
+  - `abatimento`
+- `created_at`
+
+Exemplo:
+
+```text
+customer_payments
+Pagamento: R$ 300
+
+payment_allocations
+- R$ 200 na parcela 1
+- R$ 100 na parcela 2
+```
+
+### Atualização das parcelas
+
+Ao registrar pagamento:
+
+1. Buscar parcelas pendentes/parciais da mesma venda.
+2. Calcular quanto falta em cada parcela.
+3. Aplicar o pagamento na ordem de vencimento.
+4. Atualizar:
+   - `pago_valor`
+   - `pago_em`
+   - `metodo_recebimento`
+   - `status`
+5. Criar um único lançamento em `cash_movements` com o valor total recebido.
+6. Invalidar os dados de:
+   - Vendas
+   - Parcelas
+   - Cliente
+   - Dashboard
+   - Financeiro
+   - Metas de faturamento
+
+### Dashboard
+
+Atualizar os cálculos para considerar pagamento parcial/abatimento:
+
+- **Entradas**: continuam vindo do caixa, pela data real do pagamento.
+- **A receber parcelado**: soma apenas o que ainda falta nas parcelas.
+- **A receber no mês**: soma o saldo restante das parcelas que vencem no mês.
+- **Clientes atrasados**: considerar apenas parcelas com saldo restante.
+- **Vence hoje**: considerar pendentes e parciais que ainda têm saldo.
+
+### Gráficos e financeiro
+
+Garantir que:
+
+- O gráfico de recebido use o valor real recebido no mês.
+- O total vendido continue vindo das vendas.
+- O contas/financeiro mostre uma única entrada por pagamento recebido.
+- Abatimentos futuros reduzam o “a receber” sem criar receita duplicada no mês futuro.
+
+## Arquivos que serão ajustados
+
+- `src/pages/Vendas.tsx`
+  - Novo modal de recebimento.
+  - Nova lógica de pagamento com abatimento.
+  - Tabela de parcelas com recebido/falta.
+
+- `src/components/CustomerDetail.tsx`
+  - Atualizar “Venda x Pagamento”.
+  - Mostrar parcelas parciais.
+  - Mostrar histórico de pagamentos/abatimentos.
+
+- `src/hooks/useDashboardData.ts`
+  - Recalcular valores a receber usando saldo restante, não apenas `valor_parcela`.
+
+- `src/hooks/useMonthlySalesData.ts`
+  - Ajustar recebido mensal para refletir pagamentos reais.
+
+- `src/pages/Financeiro.tsx`
+  - Melhorar descrição das entradas de pagamentos parcelados.
+
+- Nova migration do banco
+  - Criar `customer_payments`.
+  - Criar `payment_allocations`.
+  - Criar políticas de segurança por usuário.
+
+## Resultado esperado
+
+Depois disso, quando o cliente pagar mais que uma parcela:
+
+```text
+O caixa mostra exatamente o dinheiro que entrou.
+A parcela atual fica paga.
+A próxima parcela já aparece abatida.
+O dashboard reduz o valor a receber.
+O histórico do cliente mostra tudo de forma organizada.
+Os relatórios não duplicam receita.
+```
