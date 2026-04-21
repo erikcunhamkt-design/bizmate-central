@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { motion } from "framer-motion";
 import { PaginationControls } from "@/components/PaginationControls";
 
@@ -60,6 +61,8 @@ export default function Vendas() {
   const [manualTotal, setManualTotal] = useState("");
   const [editingInstallment, setEditingInstallment] = useState<{ id: string; valor: string; vencimento: string } | null>(null);
   const [editingSale, setEditingSale] = useState<{ id: string; customer_id: string; total: string; forma_pagamento: string; data_compra: string } | null>(null);
+  const [pendingDeleteSale, setPendingDeleteSale] = useState<(typeof sales)[number] | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
 
   const { data: sales = [], isLoading: salesLoading } = useQuery({
     queryKey: ["sales", user?.id],
