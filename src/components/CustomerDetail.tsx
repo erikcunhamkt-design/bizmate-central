@@ -15,7 +15,7 @@ import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
 import { useToast } from "@/hooks/use-toast";
 import {
   ShoppingCart, CheckCircle, AlertTriangle, Package, MapPin, User,
-  Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX
+  Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX, CreditCard
 } from "lucide-react";
 
 interface CustomerDetailProps {
@@ -97,6 +97,38 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     onError: () => toast({ title: "Erro ao alterar status", variant: "destructive" }),
   });
 
+  const markInstallmentPaidMutation = useMutation({
+    mutationFn: async (installmentId: string) => {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const installment = installments.find(i => i.id === installmentId);
+      if (!installment) throw new Error("Parcela não encontrada");
+
+      const { error } = await supabase
+        .from("installments")
+        .update({ status: "pago", pago_em: today, pago_valor: installment.valor_parcela })
+        .eq("id", installmentId);
+      if (error) throw error;
+
+      const { error: cashError } = await supabase.from("cash_movements").insert({
+        user_id: installment.user_id,
+        tipo: "entrada",
+        valor: installment.valor_parcela,
+        origem: "parcela",
+        ref_id: installmentId,
+        descricao: `Parcela ${installment.numero_parcela}/${installment.total_parcelas}`,
+        data: today,
+      });
+      if (cashError) throw cashError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customer-installments", customerId] });
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast({ title: "Parcela marcada como paga!" });
+    },
+    onError: () => toast({ title: "Erro ao pagar parcela", variant: "destructive" }),
+  });
+
   const startEdit = () => {
     if (customer) {
       setEditForm({
@@ -137,6 +169,16 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     }
   }
   const productsList = Array.from(productMap.values());
+
+  const salePaymentRows = sales.map((sale) => {
+    const saleInstallments = installments.filter(i => i.sale_id === sale.id);
+    const isInstallmentSale = sale.forma_pagamento === "parcelado" || saleInstallments.length > 0;
+    const paid = isInstallmentSale
+      ? saleInstallments.filter(i => i.status === "pago").reduce((sum, i) => sum + (i.pago_valor ?? i.valor_parcela), 0)
+      : sale.total_venda;
+    const pending = Math.max(sale.total_venda - paid, 0);
+    return { sale, paid, pending };
+  });
 
   const getStatusLabel = () => {
     if (isOverdue) return { label: `${overdue.length} parcela(s) atrasada(s)`, color: "text-destructive", bg: "bg-destructive/10", icon: AlertTriangle };
@@ -338,6 +380,34 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
           )}
         </div>
 
+        {salePaymentRows.length > 0 && (
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
+              <CreditCard className="h-3.5 w-3.5" /> Venda x Pagamento
+            </h3>
+            <div className="border border-border/50 rounded-xl overflow-hidden">
+              <Table>
+                <TableHeader><TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs font-semibold">Venda</TableHead>
+                  <TableHead className="text-xs font-semibold">Total</TableHead>
+                  <TableHead className="text-xs font-semibold">Pago</TableHead>
+                  <TableHead className="text-xs font-semibold">Falta</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {salePaymentRows.map(({ sale, paid, pending }) => (
+                    <TableRow key={sale.id} className="hover:bg-primary/5">
+                      <TableCell className="text-sm">{format(new Date(sale.data_compra), "dd/MM/yyyy")}</TableCell>
+                      <TableCell className="text-sm font-semibold">{formatBRL(sale.total_venda)}</TableCell>
+                      <TableCell className="text-sm font-semibold text-success">{formatBRL(paid)}</TableCell>
+                      <TableCell className={`text-sm font-semibold ${pending > 0 ? "text-destructive" : "text-muted-foreground"}`}>{formatBRL(pending)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+
         {installments.length > 0 && (
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Parcelas</h3>
@@ -348,6 +418,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                   <TableHead className="text-xs font-semibold">Parcela</TableHead>
                   <TableHead className="text-xs font-semibold">Valor</TableHead>
                   <TableHead className="text-xs font-semibold">Status</TableHead>
+                  <TableHead></TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {installments.map(i => (
@@ -356,6 +427,13 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                       <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-md">{i.numero_parcela}/{i.total_parcelas}</span></TableCell>
                       <TableCell className="text-sm font-semibold">{formatBRL(i.valor_parcela)}</TableCell>
                       <TableCell><StatusBadge status={i.status} vencimento={i.vencimento_data} /></TableCell>
+                      <TableCell>
+                        {i.status === "pendente" && (
+                          <Button size="sm" variant="ghost" className="h-8 gap-1 text-success hover:bg-success/10" onClick={() => markInstallmentPaidMutation.mutate(i.id)} disabled={markInstallmentPaidMutation.isPending}>
+                            <CheckCircle className="h-3.5 w-3.5" />Pagar
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
