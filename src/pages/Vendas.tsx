@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { motion } from "framer-motion";
 import { PaginationControls } from "@/components/PaginationControls";
+import { buildAllocationPreview, getPaidValue, getRemainingValue } from "@/lib/receivables";
 
 const PAGE_SIZE = 15;
 
@@ -63,6 +64,8 @@ export default function Vendas() {
   const [editingSale, setEditingSale] = useState<{ id: string; customer_id: string; total: string; forma_pagamento: string; data_compra: string } | null>(null);
   const [pendingDeleteSale, setPendingDeleteSale] = useState<any | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
+  const [receivingInstallment, setReceivingInstallment] = useState<any | null>(null);
+  const [receiveForm, setReceiveForm] = useState({ valor: "", data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
 
   const { data: sales = [], isLoading: salesLoading } = useQuery({
     queryKey: ["sales", user?.id],
@@ -104,26 +107,63 @@ export default function Vendas() {
     enabled: !!user,
   });
 
-  const markPaid = useMutation({
-    mutationFn: async (id: string) => {
-      const today = format(new Date(), "yyyy-MM-dd");
-      const inst = installments.find(i => i.id === id);
-      const { error } = await supabase.from("installments").update({ status: "pago", pago_em: today, pago_valor: inst?.valor_parcela }).eq("id", id);
-      if (error) throw error;
-      if (inst) {
-        await supabase.from("cash_movements").insert({
-          user_id: user!.id, tipo: "entrada", valor: inst.valor_parcela, origem: "parcela",
-          ref_id: id, descricao: `Parcela ${inst.numero_parcela}/${inst.total_parcelas}`, data: today,
-        });
+  const receivePayment = useMutation({
+    mutationFn: async () => {
+      if (!receivingInstallment) throw new Error("Selecione uma parcela");
+      const valorRecebido = parseFloat(receiveForm.valor);
+      if (!valorRecebido || valorRecebido <= 0) throw new Error("Informe o valor recebido");
+      const preview = buildAllocationPreview(installments as any, receivingInstallment.id, valorRecebido);
+      const totalEmAberto = preview.reduce((sum, item) => sum + item.amount, 0);
+      if (Math.abs(totalEmAberto - valorRecebido) > 0.009) throw new Error("O valor recebido é maior que o saldo em aberto desta venda");
+
+      const { data: payment, error: paymentError } = await (supabase as any).from("customer_payments").insert({
+        user_id: user!.id,
+        customer_id: receivingInstallment.customer_id,
+        sale_id: receivingInstallment.sale_id,
+        valor_total: valorRecebido,
+        data_pagamento: receiveForm.data,
+        metodo_recebimento: receiveForm.metodo,
+        observacoes: receiveForm.observacoes || null,
+      }).select().single();
+      if (paymentError) throw paymentError;
+
+      const { error: allocationsError } = await (supabase as any).from("payment_allocations").insert(preview.map(item => ({
+        user_id: user!.id,
+        payment_id: payment.id,
+        installment_id: item.installment.id,
+        valor_aplicado: item.amount,
+        tipo: item.installment.id === receivingInstallment.id ? "parcela" : "abatimento",
+      })));
+      if (allocationsError) throw allocationsError;
+
+      for (const item of preview) {
+        const novoPago = Math.round((getPaidValue(item.installment) + item.amount) * 100) / 100;
+        const { error } = await supabase.from("installments").update({
+          pago_valor: novoPago,
+          pago_em: item.statusAfter === "pago" ? receiveForm.data : null,
+          metodo_recebimento: receiveForm.metodo,
+          status: item.statusAfter,
+        }).eq("id", item.installment.id);
+        if (error) throw error;
       }
+
+      const { error: cashError } = await supabase.from("cash_movements").insert({
+        user_id: user!.id, tipo: "entrada", valor: valorRecebido, origem: "recebimento",
+        ref_id: payment.id, descricao: `Recebimento parcelado — ${(receivingInstallment as any).customers?.nome ?? "Cliente"}`, data: receiveForm.data,
+      });
+      if (cashError) throw cashError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["installments"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["monthly-sales"] });
       queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
-      toast({ title: "Parcela marcada como paga!" });
+      queryClient.invalidateQueries({ queryKey: ["cash-movements"] });
+      setReceivingInstallment(null);
+      setReceiveForm({ valor: "", data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
+      toast({ title: "Recebimento registrado!" });
     },
+    onError: (e) => toast({ title: "Erro ao receber pagamento", description: e.message, variant: "destructive" }),
   });
 
   const deleteInstallment = useMutation({
@@ -266,17 +306,18 @@ export default function Vendas() {
   const currentMonthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
   const currentMonthEnd = format(endOfMonth(new Date()), "yyyy-MM-dd");
   const totalVendido = sales.reduce((sum, sale) => sum + sale.total_venda, 0);
-  const totalAReceberParcelado = installments.filter(i => i.status === "pendente").reduce((sum, i) => sum + i.valor_parcela, 0);
+  const totalAReceberParcelado = installments.filter(i => i.status !== "pago").reduce((sum, i) => sum + getRemainingValue(i), 0);
   const aReceberParceladoMes = installments
-    .filter(i => i.status === "pendente" && i.vencimento_data >= currentMonthStart && i.vencimento_data <= currentMonthEnd)
-    .reduce((sum, i) => sum + i.valor_parcela, 0);
+    .filter(i => i.status !== "pago" && i.vencimento_data >= currentMonthStart && i.vencimento_data <= currentMonthEnd)
+    .reduce((sum, i) => sum + getRemainingValue(i), 0);
+  const receivingPreview = receivingInstallment ? buildAllocationPreview(installments as any, receivingInstallment.id, parseFloat(receiveForm.valor) || 0) : [];
 
   const deleteSale = useMutation({
     mutationFn: async ({ saleId, reason }: { saleId: string; reason?: string }) => {
       const sale = sales.find(s => s.id === saleId);
       if (!sale) throw new Error("Venda não encontrada");
       const saleInstallments = installments.filter(i => i.sale_id === saleId);
-      const hasPaidInstallments = saleInstallments.some(i => i.status === "pago");
+      const hasPaidInstallments = saleInstallments.some(i => i.status === "pago" || i.status === "parcial");
       const isCashSaleWithLinkedEntries = sale.forma_pagamento !== "parcelado" && sale.status === "pago";
       if (isCashSaleWithLinkedEntries && !reason?.trim()) throw new Error("Informe o motivo da exclusão");
 
@@ -355,7 +396,7 @@ export default function Vendas() {
   const filteredInstallments = installments.filter(i => {
     const matchSearch = !searchTerm || (i as any).customers?.nome?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatus = installmentStatusFilter === "todos" ? true :
-      installmentStatusFilter === "atrasado" ? (i.status === "pendente" && new Date(i.vencimento_data) < new Date()) :
+      installmentStatusFilter === "atrasado" ? (i.status !== "pago" && getRemainingValue(i) > 0 && new Date(i.vencimento_data) < new Date()) :
       i.status === installmentStatusFilter;
     return matchSearch && matchStatus;
   });
@@ -546,6 +587,7 @@ export default function Vendas() {
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 <SelectItem value="pendente">Pendente</SelectItem>
+                <SelectItem value="parcial">Parcial</SelectItem>
                 <SelectItem value="pago">Pago</SelectItem>
                 <SelectItem value="atrasado">Atrasado</SelectItem>
               </SelectContent>
@@ -560,15 +602,17 @@ export default function Vendas() {
                     <TableHead className="font-semibold">Cliente</TableHead>
                     <TableHead className="font-semibold">Parcela</TableHead>
                     <TableHead className="font-semibold">Valor</TableHead>
+                    <TableHead className="font-semibold">Recebido</TableHead>
+                    <TableHead className="font-semibold">Falta</TableHead>
                     <TableHead className="font-semibold">Status</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {instLoading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filteredInstallments.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma parcela encontrada</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma parcela encontrada</TableCell></TableRow>
                   ) : paginatedInstallments.map(i => (
                     <TableRow key={i.id} className="hover:bg-primary/5 transition-colors">
                       <TableCell>
@@ -593,13 +637,18 @@ export default function Vendas() {
                           </div>
                         ) : <span className="text-sm font-semibold">{formatBRL(i.valor_parcela)}</span>}
                       </TableCell>
+                      <TableCell className="text-sm font-semibold text-success">{formatBRL(getPaidValue(i))}</TableCell>
+                      <TableCell className={`text-sm font-semibold ${getRemainingValue(i) > 0 ? "text-warning" : "text-muted-foreground"}`}>{formatBRL(getRemainingValue(i))}</TableCell>
                       <TableCell><StatusBadge status={i.status} vencimento={i.vencimento_data} /></TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          {i.status === "pendente" && (
+                          {i.status !== "pago" && getRemainingValue(i) > 0 && (
                             <>
-                              <Button size="sm" variant="ghost" className="gap-1 h-8 text-success hover:bg-success/10" onClick={() => markPaid.mutate(i.id)} disabled={markPaid.isPending}>
-                                <CheckCircle className="h-3.5 w-3.5" />Pagar
+                              <Button size="sm" variant="ghost" className="gap-1 h-8 text-success hover:bg-success/10" onClick={() => {
+                                setReceivingInstallment(i);
+                                setReceiveForm({ valor: String(getRemainingValue(i)), data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
+                              }} disabled={receivePayment.isPending}>
+                                <CheckCircle className="h-3.5 w-3.5" />Receber
                               </Button>
                               <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-primary/10" onClick={() => setEditingInstallment({ id: i.id, valor: String(i.valor_parcela), vencimento: i.vencimento_data })}>
                                 <Pencil className="h-3.5 w-3.5" />
@@ -740,6 +789,68 @@ export default function Vendas() {
               ) : "Registrar Venda"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!receivingInstallment} onOpenChange={(open) => { if (!open) setReceivingInstallment(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
+                <CreditCard className="h-4 w-4 text-success" />
+              </div>
+              Receber pagamento
+            </DialogTitle>
+          </DialogHeader>
+          {receivingInstallment && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-2 rounded-xl border border-border/50 bg-muted/30 p-3 text-sm">
+                <div><p className="text-xs text-muted-foreground">Parcela</p><p className="font-semibold">{receivingInstallment.numero_parcela}/{receivingInstallment.total_parcelas}</p></div>
+                <div><p className="text-xs text-muted-foreground">Recebido</p><p className="font-semibold text-success">{formatBRL(getPaidValue(receivingInstallment))}</p></div>
+                <div><p className="text-xs text-muted-foreground">Falta</p><p className="font-semibold text-warning">{formatBRL(getRemainingValue(receivingInstallment))}</p></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Valor recebido</Label>
+                  <Input type="number" min={0.01} step="0.01" value={receiveForm.valor} onChange={e => setReceiveForm(f => ({ ...f, valor: e.target.value }))} className="h-10" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data</Label>
+                  <Input type="date" value={receiveForm.data} onChange={e => setReceiveForm(f => ({ ...f, data: e.target.value }))} className="h-10" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Forma de recebimento</Label>
+                <Select value={receiveForm.metodo} onValueChange={metodo => setReceiveForm(f => ({ ...f, metodo }))}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pix">PIX</SelectItem>
+                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                    <SelectItem value="cartao">Cartão</SelectItem>
+                    <SelectItem value="outro">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Observação</Label>
+                <Textarea value={receiveForm.observacoes} onChange={e => setReceiveForm(f => ({ ...f, observacoes: e.target.value }))} className="resize-none" rows={2} />
+              </div>
+              {receivingPreview.length > 0 && (
+                <div className="rounded-xl border border-border/50 overflow-hidden">
+                  <div className="px-3 py-2 bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Aplicação automática</div>
+                  {receivingPreview.map(item => (
+                    <div key={item.installment.id} className="flex items-center justify-between px-3 py-2 border-t border-border/50 text-sm">
+                      <span>Parcela {item.installment.numero_parcela}/{item.installment.total_parcelas}</span>
+                      <span className="font-semibold text-success">{formatBRL(item.amount)} — {item.statusAfter === "pago" ? "paga" : "parcial"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Button className="w-full h-11 gradient-primary shadow-glow font-semibold" onClick={() => receivePayment.mutate()} disabled={receivePayment.isPending || receivingPreview.length === 0}>
+                {receivePayment.isPending ? "Registrando..." : "Registrar recebimento"}
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

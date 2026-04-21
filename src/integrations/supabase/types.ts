@@ -122,6 +122,42 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_payments: {
+        Row: {
+          created_at: string
+          customer_id: string
+          data_pagamento: string
+          id: string
+          metodo_recebimento: string
+          observacoes: string | null
+          sale_id: string | null
+          user_id: string
+          valor_total: number
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          data_pagamento?: string
+          id?: string
+          metodo_recebimento?: string
+          observacoes?: string | null
+          sale_id?: string | null
+          user_id: string
+          valor_total: number
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          data_pagamento?: string
+          id?: string
+          metodo_recebimento?: string
+          observacoes?: string | null
+          sale_id?: string | null
+          user_id?: string
+          valor_total?: number
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           cpf: string | null
@@ -274,6 +310,44 @@ export type Database = {
             columns: ["sale_id"]
             isOneToOne: false
             referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_allocations: {
+        Row: {
+          created_at: string
+          id: string
+          installment_id: string
+          payment_id: string
+          tipo: string
+          user_id: string
+          valor_aplicado: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          installment_id: string
+          payment_id: string
+          tipo?: string
+          user_id: string
+          valor_aplicado: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          installment_id?: string
+          payment_id?: string
+          tipo?: string
+          user_id?: string
+          valor_aplicado?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_allocations_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "customer_payments"
             referencedColumns: ["id"]
           },
         ]

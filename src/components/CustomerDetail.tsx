@@ -10,9 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
 import { useToast } from "@/hooks/use-toast";
+import { buildAllocationPreview, getPaidValue, getRemainingValue } from "@/lib/receivables";
 import {
   ShoppingCart, CheckCircle, AlertTriangle, Package, MapPin, User,
   Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX, CreditCard
@@ -29,6 +31,8 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ nome: "", whatsapp: "", email: "", cpf: "", endereco: "", observacoes: "", foto_url: "" });
+  const [receivingInstallment, setReceivingInstallment] = useState<any | null>(null);
+  const [receiveForm, setReceiveForm] = useState({ valor: "", data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
 
   const { data: customer } = useQuery({
     queryKey: ["customer-detail", customerId],
@@ -97,26 +101,54 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     onError: () => toast({ title: "Erro ao alterar status", variant: "destructive" }),
   });
 
-  const markInstallmentPaidMutation = useMutation({
-    mutationFn: async (installmentId: string) => {
-      const today = format(new Date(), "yyyy-MM-dd");
-      const installment = installments.find(i => i.id === installmentId);
-      if (!installment) throw new Error("Parcela não encontrada");
+  const receivePaymentMutation = useMutation({
+    mutationFn: async () => {
+      if (!receivingInstallment) throw new Error("Parcela não encontrada");
+      const valorRecebido = parseFloat(receiveForm.valor);
+      if (!valorRecebido || valorRecebido <= 0) throw new Error("Informe o valor recebido");
+      const preview = buildAllocationPreview(installments as any, receivingInstallment.id, valorRecebido);
+      const totalAplicado = preview.reduce((sum, item) => sum + item.amount, 0);
+      if (Math.abs(totalAplicado - valorRecebido) > 0.009) throw new Error("O valor recebido é maior que o saldo em aberto desta venda");
 
-      const { error } = await supabase
-        .from("installments")
-        .update({ status: "pago", pago_em: today, pago_valor: installment.valor_parcela })
-        .eq("id", installmentId);
-      if (error) throw error;
+      const { data: payment, error: paymentError } = await (supabase as any).from("customer_payments").insert({
+        user_id: receivingInstallment.user_id,
+        customer_id: receivingInstallment.customer_id,
+        sale_id: receivingInstallment.sale_id,
+        valor_total: valorRecebido,
+        data_pagamento: receiveForm.data,
+        metodo_recebimento: receiveForm.metodo,
+        observacoes: receiveForm.observacoes || null,
+      }).select().single();
+      if (paymentError) throw paymentError;
+
+      const { error: allocationsError } = await (supabase as any).from("payment_allocations").insert(preview.map(item => ({
+        user_id: receivingInstallment.user_id,
+        payment_id: payment.id,
+        installment_id: item.installment.id,
+        valor_aplicado: item.amount,
+        tipo: item.installment.id === receivingInstallment.id ? "parcela" : "abatimento",
+      })));
+      if (allocationsError) throw allocationsError;
+
+      for (const item of preview) {
+        const novoPago = Math.round((getPaidValue(item.installment) + item.amount) * 100) / 100;
+        const { error } = await supabase.from("installments").update({
+          status: item.statusAfter,
+          pago_valor: novoPago,
+          pago_em: item.statusAfter === "pago" ? receiveForm.data : null,
+          metodo_recebimento: receiveForm.metodo,
+        }).eq("id", item.installment.id);
+        if (error) throw error;
+      }
 
       const { error: cashError } = await supabase.from("cash_movements").insert({
-        user_id: installment.user_id,
+        user_id: receivingInstallment.user_id,
         tipo: "entrada",
-        valor: installment.valor_parcela,
-        origem: "parcela",
-        ref_id: installmentId,
-        descricao: `Parcela ${installment.numero_parcela}/${installment.total_parcelas}`,
-        data: today,
+        valor: valorRecebido,
+        origem: "recebimento",
+        ref_id: payment.id,
+        descricao: `Recebimento parcelado — ${customerName}`,
+        data: receiveForm.data,
       });
       if (cashError) throw cashError;
     },
@@ -126,9 +158,12 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["monthly-sales"] });
       queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
-      toast({ title: "Parcela marcada como paga!" });
+      queryClient.invalidateQueries({ queryKey: ["cash-movements"] });
+      setReceivingInstallment(null);
+      setReceiveForm({ valor: "", data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
+      toast({ title: "Recebimento registrado!" });
     },
-    onError: () => toast({ title: "Erro ao pagar parcela", variant: "destructive" }),
+    onError: (e) => toast({ title: "Erro ao receber pagamento", description: e.message, variant: "destructive" }),
   });
 
   const startEdit = () => {
@@ -148,13 +183,13 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
 
   const salesWithInstallments = new Set(installments.map(i => i.sale_id));
   const totalComprado = sales.reduce((s, sale) => s + sale.total_venda, 0);
-  const totalPago = installments.filter(i => i.status === "pago").reduce((s, i) => s + (i.pago_valor ?? i.valor_parcela), 0);
+  const totalPago = installments.reduce((s, i) => s + getPaidValue(i), 0);
   const vendasSemParcela = sales.filter(s => !salesWithInstallments.has(s.id)).reduce((s, sale) => s + sale.total_venda, 0);
   const totalPagoGeral = totalPago + vendasSemParcela;
-  const totalDevendo = installments.filter(i => i.status === "pendente").reduce((s, i) => s + i.valor_parcela, 0);
+  const totalDevendo = installments.filter(i => i.status !== "pago").reduce((s, i) => s + getRemainingValue(i), 0);
 
   const today = new Date();
-  const overdue = installments.filter(i => i.status === "pendente" && new Date(i.vencimento_data) < today);
+  const overdue = installments.filter(i => i.status !== "pago" && getRemainingValue(i) > 0 && new Date(i.vencimento_data) < today);
   const isOverdue = overdue.length > 0;
 
   const lastPurchaseDate = sales.length > 0 ? new Date(sales[0].data_compra) : null;
@@ -176,11 +211,12 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     const saleInstallments = installments.filter(i => i.sale_id === sale.id);
     const isInstallmentSale = sale.forma_pagamento === "parcelado" || saleInstallments.length > 0;
     const paid = isInstallmentSale
-      ? saleInstallments.filter(i => i.status === "pago").reduce((sum, i) => sum + (i.pago_valor ?? i.valor_parcela), 0)
+      ? saleInstallments.reduce((sum, i) => sum + getPaidValue(i), 0)
       : sale.total_venda;
     const pending = Math.max(sale.total_venda - paid, 0);
     return { sale, paid, pending };
   });
+  const receivingPreview = receivingInstallment ? buildAllocationPreview(installments as any, receivingInstallment.id, parseFloat(receiveForm.valor) || 0) : [];
 
   const getStatusLabel = () => {
     if (isOverdue) return { label: `${overdue.length} parcela(s) atrasada(s)`, color: "text-destructive", bg: "bg-destructive/10", icon: AlertTriangle };
@@ -419,6 +455,8 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                   <TableHead className="text-xs font-semibold">Vencimento</TableHead>
                   <TableHead className="text-xs font-semibold">Parcela</TableHead>
                   <TableHead className="text-xs font-semibold">Valor</TableHead>
+                  <TableHead className="text-xs font-semibold">Recebido</TableHead>
+                  <TableHead className="text-xs font-semibold">Falta</TableHead>
                   <TableHead className="text-xs font-semibold">Status</TableHead>
                   <TableHead></TableHead>
                 </TableRow></TableHeader>
@@ -428,11 +466,16 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                       <TableCell className="text-sm">{format(new Date(i.vencimento_data), "dd/MM/yyyy")}</TableCell>
                       <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-md">{i.numero_parcela}/{i.total_parcelas}</span></TableCell>
                       <TableCell className="text-sm font-semibold">{formatBRL(i.valor_parcela)}</TableCell>
+                      <TableCell className="text-sm font-semibold text-success">{formatBRL(getPaidValue(i))}</TableCell>
+                      <TableCell className={`text-sm font-semibold ${getRemainingValue(i) > 0 ? "text-warning" : "text-muted-foreground"}`}>{formatBRL(getRemainingValue(i))}</TableCell>
                       <TableCell><StatusBadge status={i.status} vencimento={i.vencimento_data} /></TableCell>
                       <TableCell>
-                        {i.status === "pendente" && (
-                          <Button size="sm" variant="ghost" className="h-8 gap-1 text-success hover:bg-success/10" onClick={() => markInstallmentPaidMutation.mutate(i.id)} disabled={markInstallmentPaidMutation.isPending}>
-                            <CheckCircle className="h-3.5 w-3.5" />Pagar
+                        {i.status !== "pago" && getRemainingValue(i) > 0 && (
+                          <Button size="sm" variant="ghost" className="h-8 gap-1 text-success hover:bg-success/10" onClick={() => {
+                            setReceivingInstallment(i);
+                            setReceiveForm({ valor: String(getRemainingValue(i)), data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
+                          }} disabled={receivePaymentMutation.isPending}>
+                            <CheckCircle className="h-3.5 w-3.5" />Receber
                           </Button>
                         )}
                       </TableCell>
@@ -443,6 +486,42 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
             </div>
           </div>
         )}
+
+        <Dialog open={!!receivingInstallment} onOpenChange={(open) => { if (!open) setReceivingInstallment(null); }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
+                  <CreditCard className="h-4 w-4 text-success" />
+                </div>
+                Receber pagamento
+              </DialogTitle>
+            </DialogHeader>
+            {receivingInstallment && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-2 rounded-xl border border-border/50 bg-muted/30 p-3 text-sm">
+                  <div><p className="text-xs text-muted-foreground">Parcela</p><p className="font-semibold">{receivingInstallment.numero_parcela}/{receivingInstallment.total_parcelas}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Recebido</p><p className="font-semibold text-success">{formatBRL(getPaidValue(receivingInstallment))}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Falta</p><p className="font-semibold text-warning">{formatBRL(getRemainingValue(receivingInstallment))}</p></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5"><Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Valor recebido</Label><Input type="number" min={0.01} step="0.01" value={receiveForm.valor} onChange={e => setReceiveForm(f => ({ ...f, valor: e.target.value }))} /></div>
+                  <div className="space-y-1.5"><Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data</Label><Input type="date" value={receiveForm.data} onChange={e => setReceiveForm(f => ({ ...f, data: e.target.value }))} /></div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Forma de recebimento</Label>
+                  <Select value={receiveForm.metodo} onValueChange={metodo => setReceiveForm(f => ({ ...f, metodo }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="pix">PIX</SelectItem><SelectItem value="dinheiro">Dinheiro</SelectItem><SelectItem value="cartao">Cartão</SelectItem><SelectItem value="outro">Outro</SelectItem></SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5"><Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Observação</Label><Textarea value={receiveForm.observacoes} onChange={e => setReceiveForm(f => ({ ...f, observacoes: e.target.value }))} className="resize-none" rows={2} /></div>
+                {receivingPreview.length > 0 && <div className="rounded-xl border border-border/50 overflow-hidden"><div className="px-3 py-2 bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Aplicação automática</div>{receivingPreview.map(item => <div key={item.installment.id} className="flex items-center justify-between px-3 py-2 border-t border-border/50 text-sm"><span>Parcela {item.installment.numero_parcela}/{item.installment.total_parcelas}</span><span className="font-semibold text-success">{formatBRL(item.amount)} — {item.statusAfter === "pago" ? "paga" : "parcial"}</span></div>)}</div>}
+                <Button className="w-full gradient-primary shadow-glow" onClick={() => receivePaymentMutation.mutate()} disabled={receivePaymentMutation.isPending || receivingPreview.length === 0}>{receivePaymentMutation.isPending ? "Registrando..." : "Registrar recebimento"}</Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );

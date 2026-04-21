@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { startOfMonth, endOfMonth, format, addDays } from "date-fns";
+import { getRemainingValue } from "@/lib/receivables";
 
 export function useDashboardData() {
   const { user } = useAuth();
@@ -25,6 +26,19 @@ export function useDashboardData() {
     enabled: !!user,
   });
 
+  const allOpenInstallments = useQuery({
+    queryKey: ["dashboard", "all-open-installments", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("installments")
+        .select("valor_parcela, pago_valor, status")
+        .neq("status", "pago");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user,
+  });
+
   // Overdue installments (before today, still pending)
   const overdueQuery = useQuery({
     queryKey: ["dashboard", "overdue", user?.id, hoje],
@@ -32,7 +46,7 @@ export function useDashboardData() {
       const { data, error } = await supabase
         .from("installments")
         .select("*, customers(nome)")
-        .eq("status", "pendente")
+        .neq("status", "pago")
         .lt("vencimento_data", hoje)
         .order("vencimento_data");
       if (error) throw error;
@@ -48,7 +62,7 @@ export function useDashboardData() {
       const { data, error } = await supabase
         .from("installments")
         .select("*, customers(nome)")
-        .eq("status", "pendente")
+        .neq("status", "pago")
         .gte("vencimento_data", hoje)
         .lte("vencimento_data", em7dias)
         .order("vencimento_data");
@@ -100,19 +114,20 @@ export function useDashboardData() {
   const exp = expenses.data ?? [];
   const cash = cashMovements.data ?? [];
   const allSales = sales.data ?? [];
+  const openInstallments = allOpenInstallments.data ?? [];
 
   const entradas = cash.filter(c => c.tipo === "entrada").reduce((s, c) => s + c.valor, 0);
   const saidas = cash.filter(c => c.tipo === "saida").reduce((s, c) => s + c.valor, 0);
   const lucro = entradas - saidas;
 
-  const aReceber = inst.filter(i => i.status === "pendente").reduce((s, i) => s + i.valor_parcela, 0);
+  const aReceber = inst.filter(i => i.status !== "pago").reduce((s, i) => s + getRemainingValue(i), 0);
   const totalVendido = allSales.reduce((s, sale) => s + sale.total_venda, 0);
-  const totalAReceberParcelado = aReceber;
+  const totalAReceberParcelado = openInstallments.reduce((s, i) => s + getRemainingValue(i as any), 0);
   const aReceberParceladoMes = aReceber;
   const aPagar = exp.filter(e => e.status === "pendente").reduce((s, e) => s + e.valor, 0);
 
   const venceHoje = [
-    ...inst.filter(i => i.vencimento_data === hoje && i.status === "pendente"),
+    ...inst.filter(i => i.vencimento_data === hoje && i.status !== "pago" && getRemainingValue(i) > 0),
     ...exp.filter(e => e.vencimento_data === hoje && e.status === "pendente"),
   ];
 
@@ -122,7 +137,7 @@ export function useDashboardData() {
       id: i.id,
       tipo: "parcela" as const,
       descricao: `${(i as any).customers?.nome ?? "Cliente"} — Parcela ${i.numero_parcela}/${i.total_parcelas}`,
-      valor: i.valor_parcela,
+      valor: getRemainingValue(i),
       status: i.status,
     }));
 
@@ -140,7 +155,7 @@ export function useDashboardData() {
     id: i.id,
     cliente: (i as any).customers?.nome ?? "Cliente",
     parcela: `${i.numero_parcela}/${i.total_parcelas}`,
-    valor: i.valor_parcela,
+    valor: getRemainingValue(i),
     vencimento: i.vencimento_data,
   }));
 
@@ -148,12 +163,12 @@ export function useDashboardData() {
     id: i.id,
     cliente: (i as any).customers?.nome ?? "Cliente",
     parcela: `${i.numero_parcela}/${i.total_parcelas}`,
-    valor: i.valor_parcela,
+    valor: getRemainingValue(i),
     vencimento: i.vencimento_data,
   }));
 
   return {
-    loading: installments.isLoading || expenses.isLoading || cashMovements.isLoading || sales.isLoading,
+    loading: installments.isLoading || allOpenInstallments.isLoading || expenses.isLoading || cashMovements.isLoading || sales.isLoading,
     entradas,
     saidas,
     lucro,

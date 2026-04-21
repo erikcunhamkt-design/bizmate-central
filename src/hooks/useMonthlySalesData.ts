@@ -29,9 +29,10 @@ export function useMonthlySalesData() {
       if (salesError) throw salesError;
 
       const { data: payments, error: paymentsError } = await supabase
-        .from("installments")
-        .select("pago_valor, pago_em, valor_parcela, status")
-        .gte("vencimento_data", sixMonthsAgo);
+        .from("cash_movements")
+        .select("valor, data, tipo")
+        .eq("tipo", "entrada")
+        .gte("data", sixMonthsAgo);
       if (paymentsError) throw paymentsError;
 
       return { sales: sales ?? [], payments: payments ?? [] };
@@ -47,11 +48,11 @@ export function useMonthlySalesData() {
       (s) => s.data_compra >= m.start && s.data_compra <= m.end
     );
     const monthPayments = payments.filter(
-      (p) => p.pago_em && format(new Date(p.pago_em), "yyyy-MM-dd") >= m.start && format(new Date(p.pago_em), "yyyy-MM-dd") <= m.end
+      (p) => p.data >= m.start && p.data <= m.end
     );
 
     const vendas = monthSales.reduce((sum, s) => sum + (s.total_venda ?? 0), 0);
-    const recebido = monthPayments.reduce((sum, p) => sum + (p.pago_valor ?? 0), 0);
+    const recebido = monthPayments.reduce((sum, p) => sum + (p.valor ?? 0), 0);
 
     return {
       name: m.label.charAt(0).toUpperCase() + m.label.slice(1),
