@@ -5,6 +5,7 @@ type Props = { status: string; vencimento?: string };
 
 export function getStatusInfo(status: string, vencimento?: string) {
   if (status === "pago") return { label: "Pago", variant: "success" as const };
+  if (status === "parcial") return { label: "Parcial", variant: "primary" as const };
   if (status === "ativa") return { label: "Ativa", variant: "primary" as const };
   if (vencimento) {
     const d = parseISO(vencimento);
