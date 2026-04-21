@@ -74,6 +74,7 @@ export default function Contas() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["expenses"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
       toast({ title: "Conta marcada como paga!" });
     },
   });

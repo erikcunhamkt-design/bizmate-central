@@ -120,6 +120,8 @@ export default function Vendas() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["installments"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["monthly-sales"] });
+      queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
       toast({ title: "Parcela marcada como paga!" });
     },
   });
@@ -162,6 +164,8 @@ export default function Vendas() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["monthly-sales"] });
+      queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
       setEditingSale(null);
       toast({ title: "Venda atualizada!" });
     },
@@ -227,6 +231,8 @@ export default function Vendas() {
       queryClient.invalidateQueries({ queryKey: ["installments"] });
       queryClient.invalidateQueries({ queryKey: ["products-list"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["monthly-sales"] });
+      queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
       toast({ title: "Venda registrada com sucesso!" });
       resetForm();
     },
@@ -319,6 +325,8 @@ export default function Vendas() {
       queryClient.invalidateQueries({ queryKey: ["installments"] });
       queryClient.invalidateQueries({ queryKey: ["products-list"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["monthly-sales"] });
+      queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
       setPendingDeleteSale(null);
       setDeleteReason("");
       toast({ title: "Venda excluída!" });
