@@ -86,15 +86,29 @@ export function useDashboardData() {
     enabled: !!user,
   });
 
+  const sales = useQuery({
+    queryKey: ["dashboard", "sales", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("sales").select("total_venda");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user,
+  });
+
   const inst = installments.data ?? [];
   const exp = expenses.data ?? [];
   const cash = cashMovements.data ?? [];
+  const allSales = sales.data ?? [];
 
   const entradas = cash.filter(c => c.tipo === "entrada").reduce((s, c) => s + c.valor, 0);
   const saidas = cash.filter(c => c.tipo === "saida").reduce((s, c) => s + c.valor, 0);
   const lucro = entradas - saidas;
 
   const aReceber = inst.filter(i => i.status === "pendente").reduce((s, i) => s + i.valor_parcela, 0);
+  const totalVendido = allSales.reduce((s, sale) => s + sale.total_venda, 0);
+  const totalAReceberParcelado = aReceber;
+  const aReceberParceladoMes = aReceber;
   const aPagar = exp.filter(e => e.status === "pendente").reduce((s, e) => s + e.valor, 0);
 
   const venceHoje = [
@@ -139,10 +153,13 @@ export function useDashboardData() {
   }));
 
   return {
-    loading: installments.isLoading || expenses.isLoading || cashMovements.isLoading,
+    loading: installments.isLoading || expenses.isLoading || cashMovements.isLoading || sales.isLoading,
     entradas,
     saidas,
     lucro,
+    totalVendido,
+    totalAReceberParcelado,
+    aReceberParceladoMes,
     aReceber,
     aPagar,
     venceHojeCount: venceHoje.length,
