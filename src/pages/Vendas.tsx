@@ -269,6 +269,15 @@ export default function Vendas() {
       }
       const { error: cashSaleErr } = await supabase.from("cash_movements").delete().eq("ref_id", saleId);
       if (cashSaleErr) throw cashSaleErr;
+      const { data: saleItems, error: saleItemsFetchErr } = await supabase.from("sale_items").select("product_id, quantidade").eq("sale_id", saleId);
+      if (saleItemsFetchErr) throw saleItemsFetchErr;
+      for (const item of saleItems ?? []) {
+        const product = products.find(p => p.id === item.product_id);
+        if (product) {
+          const { error: stockErr } = await supabase.from("products").update({ estoque_atual: product.estoque_atual + item.quantidade }).eq("id", item.product_id);
+          if (stockErr) throw stockErr;
+        }
+      }
       const { error: installmentsErr } = await supabase.from("installments").delete().eq("sale_id", saleId);
       if (installmentsErr) throw installmentsErr;
       const { error: itemsErr } = await supabase.from("sale_items").delete().eq("sale_id", saleId);
@@ -279,6 +288,7 @@ export default function Vendas() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["installments"] });
+      queryClient.invalidateQueries({ queryKey: ["products-list"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       toast({ title: "Venda excluída!" });
     },
