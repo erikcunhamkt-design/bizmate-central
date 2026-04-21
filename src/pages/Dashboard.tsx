@@ -43,7 +43,7 @@ const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } 
 const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } };
 
 export default function Dashboard() {
-  const { loading, entradas, saidas, lucro, aReceber, aPagar, venceHojeCount, todayItems, overdueItems, upcomingItems } =
+  const { loading, entradas, saidas, lucro, totalVendido, totalAReceberParcelado, aReceberParceladoMes, aReceber, aPagar, venceHojeCount, todayItems, overdueItems, upcomingItems } =
     useDashboardData();
   const { chartData, loading: chartLoading } = useMonthlySalesData();
   useOverdueNotifications();
@@ -116,6 +116,42 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ))}
+      </motion.div>
+
+      <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Card className="border-border/50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center">
+              <DollarSign className="h-4 w-4 text-success" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">Total vendido</p>
+              <p className="text-lg font-bold text-success">{formatBRL(totalVendido)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+              <CreditCard className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">A receber parcelado</p>
+              <p className="text-lg font-bold text-primary">{formatBRL(totalAReceberParcelado)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-warning/10 flex items-center justify-center">
+              <CalendarDays className="h-4 w-4 text-warning" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">A receber no mês</p>
+              <p className="text-lg font-bold text-warning">{formatBRL(aReceberParceladoMes)}</p>
+            </div>
+          </CardContent>
+        </Card>
       </motion.div>
 
       {/* Quick Actions */}
