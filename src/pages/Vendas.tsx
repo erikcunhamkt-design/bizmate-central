@@ -9,9 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { endOfMonth, format, startOfMonth } from "date-fns";
 import { useSearchParams } from "react-router-dom";
-import { CheckCircle, Plus, Trash2, Pencil, ShoppingCart, CreditCard, Search, X } from "lucide-react";
+import { CalendarDays, CheckCircle, DollarSign, Plus, Trash2, Pencil, ShoppingCart, CreditCard, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -263,6 +263,13 @@ export default function Vendas() {
 
   const totalCart = cart.length > 0 ? cart.reduce((s, c) => s + c.preco * c.quantidade, 0) : parseFloat(manualTotal) || 0;
   const totalVendaAtual = parcelado ? parseFloat(valorTotalParcelado) || 0 : totalCart;
+  const currentMonthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
+  const currentMonthEnd = format(endOfMonth(new Date()), "yyyy-MM-dd");
+  const totalVendido = sales.reduce((sum, sale) => sum + sale.total_venda, 0);
+  const totalAReceberParcelado = installments.filter(i => i.status === "pendente").reduce((sum, i) => sum + i.valor_parcela, 0);
+  const aReceberParceladoMes = installments
+    .filter(i => i.status === "pendente" && i.vencimento_data >= currentMonthStart && i.vencimento_data <= currentMonthEnd)
+    .reduce((sum, i) => sum + i.valor_parcela, 0);
 
   const deleteSale = useMutation({
     mutationFn: async ({ saleId, reason }: { saleId: string; reason?: string }) => {
@@ -366,6 +373,42 @@ export default function Vendas() {
         <Button onClick={() => setOpenNova(true)} className="gap-2 gradient-primary shadow-glow">
           <Plus className="h-4 w-4" />Nova Venda
         </Button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Card className="border-border/50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center">
+              <DollarSign className="h-4 w-4 text-success" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">Total vendido</p>
+              <p className="text-lg font-bold text-success">{formatBRL(totalVendido)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+              <CreditCard className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">A receber parcelado</p>
+              <p className="text-lg font-bold text-primary">{formatBRL(totalAReceberParcelado)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-warning/10 flex items-center justify-center">
+              <CalendarDays className="h-4 w-4 text-warning" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">A receber no mês</p>
+              <p className="text-lg font-bold text-warning">{formatBRL(aReceberParceladoMes)}</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Tabs defaultValue={defaultTab}>
