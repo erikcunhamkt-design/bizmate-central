@@ -380,6 +380,34 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
           )}
         </div>
 
+        {salePaymentRows.length > 0 && (
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
+              <CreditCard className="h-3.5 w-3.5" /> Venda x Pagamento
+            </h3>
+            <div className="border border-border/50 rounded-xl overflow-hidden">
+              <Table>
+                <TableHeader><TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs font-semibold">Venda</TableHead>
+                  <TableHead className="text-xs font-semibold">Total</TableHead>
+                  <TableHead className="text-xs font-semibold">Pago</TableHead>
+                  <TableHead className="text-xs font-semibold">Falta</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {salePaymentRows.map(({ sale, paid, pending }) => (
+                    <TableRow key={sale.id} className="hover:bg-primary/5">
+                      <TableCell className="text-sm">{format(new Date(sale.data_compra), "dd/MM/yyyy")}</TableCell>
+                      <TableCell className="text-sm font-semibold">{formatBRL(sale.total_venda)}</TableCell>
+                      <TableCell className="text-sm font-semibold text-success">{formatBRL(paid)}</TableCell>
+                      <TableCell className={`text-sm font-semibold ${pending > 0 ? "text-destructive" : "text-muted-foreground"}`}>{formatBRL(pending)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+
         {installments.length > 0 && (
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Parcelas</h3>
@@ -390,6 +418,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                   <TableHead className="text-xs font-semibold">Parcela</TableHead>
                   <TableHead className="text-xs font-semibold">Valor</TableHead>
                   <TableHead className="text-xs font-semibold">Status</TableHead>
+                  <TableHead></TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {installments.map(i => (
@@ -398,6 +427,13 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                       <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-md">{i.numero_parcela}/{i.total_parcelas}</span></TableCell>
                       <TableCell className="text-sm font-semibold">{formatBRL(i.valor_parcela)}</TableCell>
                       <TableCell><StatusBadge status={i.status} vencimento={i.vencimento_data} /></TableCell>
+                      <TableCell>
+                        {i.status === "pendente" && (
+                          <Button size="sm" variant="ghost" className="h-8 gap-1 text-success hover:bg-success/10" onClick={() => markInstallmentPaidMutation.mutate(i.id)} disabled={markInstallmentPaidMutation.isPending}>
+                            <CheckCircle className="h-3.5 w-3.5" />Pagar
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
