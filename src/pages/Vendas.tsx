@@ -51,8 +51,10 @@ export default function Vendas() {
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [formaPagamento, setFormaPagamento] = useState("pix");
   const [parcelado, setParcelado] = useState(false);
+  const [valorTotalParcelado, setValorTotalParcelado] = useState("");
   const [valorPorParcela, setValorPorParcela] = useState("");
   const [diaPagamento, setDiaPagamento] = useState("");
+  const [quantidadeParcelas, setQuantidadeParcelas] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [addProductId, setAddProductId] = useState("");
   const [manualTotal, setManualTotal] = useState("");
@@ -144,13 +146,14 @@ export default function Vendas() {
   const createSale = useMutation({
     mutationFn: async () => {
       if (!selectedCustomer) throw new Error("Selecione um cliente");
-      const total = cart.length > 0 ? cart.reduce((s, c) => s + c.preco * c.quantidade, 0) : parseFloat(manualTotal) || 0;
+      const totalProdutos = cart.length > 0 ? cart.reduce((s, c) => s + c.preco * c.quantidade, 0) : parseFloat(manualTotal) || 0;
+      const total = parcelado ? parseFloat(valorTotalParcelado) || 0 : totalProdutos;
       if (total <= 0) throw new Error("Informe o valor da venda");
       const today = format(new Date(), "yyyy-MM-dd");
 
       const { data: sale, error: saleErr } = await supabase.from("sales").insert({
         user_id: user!.id, customer_id: selectedCustomer, total_venda: total,
-        forma_pagamento: formaPagamento, data_compra: today, status: !parcelado ? "pago" : "ativa",
+        forma_pagamento: parcelado ? "parcelado" : formaPagamento, data_compra: today, status: !parcelado ? "pago" : "ativa",
       }).select().single();
       if (saleErr) throw saleErr;
 
@@ -167,10 +170,11 @@ export default function Vendas() {
         }
       }
 
-      if (parcelado && valorPorParcela) {
+      if (parcelado) {
         const vparcela = parseFloat(valorPorParcela);
+        const numParcelas = parseInt(quantidadeParcelas);
         if (vparcela <= 0) throw new Error("Valor por parcela inválido");
-        const numParcelas = Math.ceil(total / vparcela);
+        if (!numParcelas || numParcelas <= 0) throw new Error("Informe em quantas vezes o cliente fez");
         const dia = parseInt(diaPagamento) || new Date().getDate();
         const parcelas = Array.from({ length: numParcelas }, (_, i) => {
           const venc = new Date();
@@ -178,6 +182,7 @@ export default function Vendas() {
           venc.setDate(Math.min(dia, new Date(venc.getFullYear(), venc.getMonth() + 1, 0).getDate()));
           const isLast = i === numParcelas - 1;
           const valor = isLast ? Math.round((total - vparcela * (numParcelas - 1)) * 100) / 100 : vparcela;
+          if (valor <= 0) throw new Error("Confira o total, valor da parcela e quantidade de vezes");
           return {
             user_id: user!.id, customer_id: selectedCustomer, sale_id: sale.id,
             numero_parcela: i + 1, total_parcelas: numParcelas, valor_parcela: valor,
@@ -205,7 +210,7 @@ export default function Vendas() {
 
   const resetForm = () => {
     setOpenNova(false); setSelectedCustomer(""); setFormaPagamento("pix");
-    setParcelado(false); setValorPorParcela(""); setDiaPagamento("");
+    setParcelado(false); setValorTotalParcelado(""); setValorPorParcela(""); setDiaPagamento(""); setQuantidadeParcelas("");
     setCart([]); setAddProductId(""); setManualTotal("");
   };
 
@@ -225,6 +230,38 @@ export default function Vendas() {
   const removeFromCart = (productId: string) => setCart(prev => prev.filter(c => c.product_id !== productId));
 
   const totalCart = cart.length > 0 ? cart.reduce((s, c) => s + c.preco * c.quantidade, 0) : parseFloat(manualTotal) || 0;
+  const totalVendaAtual = parcelado ? parseFloat(valorTotalParcelado) || 0 : totalCart;
+
+  const deleteSale = useMutation({
+    mutationFn: async (saleId: string) => {
+      const sale = sales.find(s => s.id === saleId);
+      if (!sale) throw new Error("Venda não encontrada");
+      const saleInstallments = installments.filter(i => i.sale_id === saleId);
+      const hasPaidInstallments = saleInstallments.some(i => i.status === "pago");
+      if ((sale.status === "pago" || hasPaidInstallments) && !window.confirm("Esta venda possui pagamento registrado. Deseja excluir a venda e os lançamentos financeiros vinculados?")) return;
+
+      const installmentIds = saleInstallments.map(i => i.id);
+      if (installmentIds.length > 0) {
+        const { error: cashInstallmentsErr } = await supabase.from("cash_movements").delete().in("ref_id", installmentIds);
+        if (cashInstallmentsErr) throw cashInstallmentsErr;
+      }
+      const { error: cashSaleErr } = await supabase.from("cash_movements").delete().eq("ref_id", saleId);
+      if (cashSaleErr) throw cashSaleErr;
+      const { error: installmentsErr } = await supabase.from("installments").delete().eq("sale_id", saleId);
+      if (installmentsErr) throw installmentsErr;
+      const { error: itemsErr } = await supabase.from("sale_items").delete().eq("sale_id", saleId);
+      if (itemsErr) throw itemsErr;
+      const { error: saleErr } = await supabase.from("sales").delete().eq("id", saleId);
+      if (saleErr) throw saleErr;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast({ title: "Venda excluída!" });
+    },
+    onError: (e) => toast({ title: "Erro ao excluir venda", description: e.message, variant: "destructive" }),
+  });
 
   // Filtered data
   const filteredSales = sales.filter(s => {
