@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { motion } from "framer-motion";
 import { PaginationControls } from "@/components/PaginationControls";
+import { buildAllocationPreview, getPaidValue, getRemainingValue } from "@/lib/receivables";
 
 const PAGE_SIZE = 15;
 
@@ -63,6 +64,8 @@ export default function Vendas() {
   const [editingSale, setEditingSale] = useState<{ id: string; customer_id: string; total: string; forma_pagamento: string; data_compra: string } | null>(null);
   const [pendingDeleteSale, setPendingDeleteSale] = useState<any | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
+  const [receivingInstallment, setReceivingInstallment] = useState<any | null>(null);
+  const [receiveForm, setReceiveForm] = useState({ valor: "", data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
 
   const { data: sales = [], isLoading: salesLoading } = useQuery({
     queryKey: ["sales", user?.id],
@@ -104,26 +107,63 @@ export default function Vendas() {
     enabled: !!user,
   });
 
-  const markPaid = useMutation({
-    mutationFn: async (id: string) => {
-      const today = format(new Date(), "yyyy-MM-dd");
-      const inst = installments.find(i => i.id === id);
-      const { error } = await supabase.from("installments").update({ status: "pago", pago_em: today, pago_valor: inst?.valor_parcela }).eq("id", id);
-      if (error) throw error;
-      if (inst) {
-        await supabase.from("cash_movements").insert({
-          user_id: user!.id, tipo: "entrada", valor: inst.valor_parcela, origem: "parcela",
-          ref_id: id, descricao: `Parcela ${inst.numero_parcela}/${inst.total_parcelas}`, data: today,
-        });
+  const receivePayment = useMutation({
+    mutationFn: async () => {
+      if (!receivingInstallment) throw new Error("Selecione uma parcela");
+      const valorRecebido = parseFloat(receiveForm.valor);
+      if (!valorRecebido || valorRecebido <= 0) throw new Error("Informe o valor recebido");
+      const preview = buildAllocationPreview(installments as any, receivingInstallment.id, valorRecebido);
+      const totalEmAberto = preview.reduce((sum, item) => sum + item.amount, 0);
+      if (Math.abs(totalEmAberto - valorRecebido) > 0.009) throw new Error("O valor recebido é maior que o saldo em aberto desta venda");
+
+      const { data: payment, error: paymentError } = await (supabase as any).from("customer_payments").insert({
+        user_id: user!.id,
+        customer_id: receivingInstallment.customer_id,
+        sale_id: receivingInstallment.sale_id,
+        valor_total: valorRecebido,
+        data_pagamento: receiveForm.data,
+        metodo_recebimento: receiveForm.metodo,
+        observacoes: receiveForm.observacoes || null,
+      }).select().single();
+      if (paymentError) throw paymentError;
+
+      const { error: allocationsError } = await (supabase as any).from("payment_allocations").insert(preview.map(item => ({
+        user_id: user!.id,
+        payment_id: payment.id,
+        installment_id: item.installment.id,
+        valor_aplicado: item.amount,
+        tipo: item.installment.id === receivingInstallment.id ? "parcela" : "abatimento",
+      })));
+      if (allocationsError) throw allocationsError;
+
+      for (const item of preview) {
+        const novoPago = Math.round((getPaidValue(item.installment) + item.amount) * 100) / 100;
+        const { error } = await supabase.from("installments").update({
+          pago_valor: novoPago,
+          pago_em: item.statusAfter === "pago" ? receiveForm.data : null,
+          metodo_recebimento: receiveForm.metodo,
+          status: item.statusAfter,
+        }).eq("id", item.installment.id);
+        if (error) throw error;
       }
+
+      const { error: cashError } = await supabase.from("cash_movements").insert({
+        user_id: user!.id, tipo: "entrada", valor: valorRecebido, origem: "recebimento",
+        ref_id: payment.id, descricao: `Recebimento parcelado — ${(receivingInstallment as any).customers?.nome ?? "Cliente"}`, data: receiveForm.data,
+      });
+      if (cashError) throw cashError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["installments"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["monthly-sales"] });
       queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
-      toast({ title: "Parcela marcada como paga!" });
+      queryClient.invalidateQueries({ queryKey: ["cash-movements"] });
+      setReceivingInstallment(null);
+      setReceiveForm({ valor: "", data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
+      toast({ title: "Recebimento registrado!" });
     },
+    onError: (e) => toast({ title: "Erro ao receber pagamento", description: e.message, variant: "destructive" }),
   });
 
   const deleteInstallment = useMutation({
