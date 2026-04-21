@@ -11,7 +11,7 @@ import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useSearchParams } from "react-router-dom";
-import { CheckCircle, Plus, Trash2, Pencil, ShoppingCart, CreditCard, Search, Filter } from "lucide-react";
+import { CheckCircle, Plus, Trash2, Pencil, ShoppingCart, CreditCard, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -59,6 +59,7 @@ export default function Vendas() {
   const [addProductId, setAddProductId] = useState("");
   const [manualTotal, setManualTotal] = useState("");
   const [editingInstallment, setEditingInstallment] = useState<{ id: string; valor: string; vencimento: string } | null>(null);
+  const [editingSale, setEditingSale] = useState<{ id: string; customer_id: string; total: string; forma_pagamento: string; data_compra: string } | null>(null);
 
   const { data: sales = [], isLoading: salesLoading } = useQuery({
     queryKey: ["sales", user?.id],
@@ -141,6 +142,27 @@ export default function Vendas() {
       setEditingInstallment(null);
       toast({ title: "Parcela atualizada!" });
     },
+  });
+
+  const updateSale = useMutation({
+    mutationFn: async ({ id, customer_id, total, forma_pagamento, data_compra }: { id: string; customer_id: string; total: number; forma_pagamento: string; data_compra: string }) => {
+      if (total <= 0) throw new Error("Informe um valor válido");
+      const { error } = await supabase.from("sales").update({ customer_id, total_venda: total, forma_pagamento, data_compra }).eq("id", id);
+      if (error) throw error;
+      const { error: cashError } = await supabase
+        .from("cash_movements")
+        .update({ valor: total, data: data_compra, descricao: `Venda à vista` })
+        .eq("ref_id", id)
+        .eq("origem", "venda");
+      if (cashError) throw cashError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      setEditingSale(null);
+      toast({ title: "Venda atualizada!" });
+    },
+    onError: (e) => toast({ title: "Erro ao editar venda", description: e.message, variant: "destructive" }),
   });
 
   const createSale = useMutation({
