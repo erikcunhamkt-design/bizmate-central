@@ -10,9 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
 import { useToast } from "@/hooks/use-toast";
+import { buildAllocationPreview, getPaidValue, getRemainingValue } from "@/lib/receivables";
 import {
   ShoppingCart, CheckCircle, AlertTriangle, Package, MapPin, User,
   Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX, CreditCard
@@ -29,6 +31,8 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ nome: "", whatsapp: "", email: "", cpf: "", endereco: "", observacoes: "", foto_url: "" });
+  const [receivingInstallment, setReceivingInstallment] = useState<any | null>(null);
+  const [receiveForm, setReceiveForm] = useState({ valor: "", data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
 
   const { data: customer } = useQuery({
     queryKey: ["customer-detail", customerId],
@@ -97,26 +101,54 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     onError: () => toast({ title: "Erro ao alterar status", variant: "destructive" }),
   });
 
-  const markInstallmentPaidMutation = useMutation({
-    mutationFn: async (installmentId: string) => {
-      const today = format(new Date(), "yyyy-MM-dd");
-      const installment = installments.find(i => i.id === installmentId);
-      if (!installment) throw new Error("Parcela não encontrada");
+  const receivePaymentMutation = useMutation({
+    mutationFn: async () => {
+      if (!receivingInstallment) throw new Error("Parcela não encontrada");
+      const valorRecebido = parseFloat(receiveForm.valor);
+      if (!valorRecebido || valorRecebido <= 0) throw new Error("Informe o valor recebido");
+      const preview = buildAllocationPreview(installments as any, receivingInstallment.id, valorRecebido);
+      const totalAplicado = preview.reduce((sum, item) => sum + item.amount, 0);
+      if (Math.abs(totalAplicado - valorRecebido) > 0.009) throw new Error("O valor recebido é maior que o saldo em aberto desta venda");
 
-      const { error } = await supabase
-        .from("installments")
-        .update({ status: "pago", pago_em: today, pago_valor: installment.valor_parcela })
-        .eq("id", installmentId);
-      if (error) throw error;
+      const { data: payment, error: paymentError } = await (supabase as any).from("customer_payments").insert({
+        user_id: receivingInstallment.user_id,
+        customer_id: receivingInstallment.customer_id,
+        sale_id: receivingInstallment.sale_id,
+        valor_total: valorRecebido,
+        data_pagamento: receiveForm.data,
+        metodo_recebimento: receiveForm.metodo,
+        observacoes: receiveForm.observacoes || null,
+      }).select().single();
+      if (paymentError) throw paymentError;
+
+      const { error: allocationsError } = await (supabase as any).from("payment_allocations").insert(preview.map(item => ({
+        user_id: receivingInstallment.user_id,
+        payment_id: payment.id,
+        installment_id: item.installment.id,
+        valor_aplicado: item.amount,
+        tipo: item.installment.id === receivingInstallment.id ? "parcela" : "abatimento",
+      })));
+      if (allocationsError) throw allocationsError;
+
+      for (const item of preview) {
+        const novoPago = Math.round((getPaidValue(item.installment) + item.amount) * 100) / 100;
+        const { error } = await supabase.from("installments").update({
+          status: item.statusAfter,
+          pago_valor: novoPago,
+          pago_em: item.statusAfter === "pago" ? receiveForm.data : null,
+          metodo_recebimento: receiveForm.metodo,
+        }).eq("id", item.installment.id);
+        if (error) throw error;
+      }
 
       const { error: cashError } = await supabase.from("cash_movements").insert({
-        user_id: installment.user_id,
+        user_id: receivingInstallment.user_id,
         tipo: "entrada",
-        valor: installment.valor_parcela,
-        origem: "parcela",
-        ref_id: installmentId,
-        descricao: `Parcela ${installment.numero_parcela}/${installment.total_parcelas}`,
-        data: today,
+        valor: valorRecebido,
+        origem: "recebimento",
+        ref_id: payment.id,
+        descricao: `Recebimento parcelado — ${customerName}`,
+        data: receiveForm.data,
       });
       if (cashError) throw cashError;
     },
@@ -126,9 +158,12 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["monthly-sales"] });
       queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
-      toast({ title: "Parcela marcada como paga!" });
+      queryClient.invalidateQueries({ queryKey: ["cash-movements"] });
+      setReceivingInstallment(null);
+      setReceiveForm({ valor: "", data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
+      toast({ title: "Recebimento registrado!" });
     },
-    onError: () => toast({ title: "Erro ao pagar parcela", variant: "destructive" }),
+    onError: (e) => toast({ title: "Erro ao receber pagamento", description: e.message, variant: "destructive" }),
   });
 
   const startEdit = () => {
