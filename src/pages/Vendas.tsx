@@ -258,14 +258,40 @@ export default function Vendas() {
   const totalVendaAtual = parcelado ? parseFloat(valorTotalParcelado) || 0 : totalCart;
 
   const deleteSale = useMutation({
-    mutationFn: async (saleId: string) => {
+    mutationFn: async ({ saleId, reason }: { saleId: string; reason?: string }) => {
       const sale = sales.find(s => s.id === saleId);
       if (!sale) throw new Error("Venda não encontrada");
       const saleInstallments = installments.filter(i => i.sale_id === saleId);
       const hasPaidInstallments = saleInstallments.some(i => i.status === "pago");
-      if ((sale.status === "pago" || hasPaidInstallments) && !window.confirm("Esta venda possui pagamento registrado. Deseja excluir a venda e os lançamentos financeiros vinculados?")) return;
+      const isCashSaleWithLinkedEntries = sale.forma_pagamento !== "parcelado" && sale.status === "pago";
+      if (isCashSaleWithLinkedEntries && !reason?.trim()) throw new Error("Informe o motivo da exclusão");
 
       const installmentIds = saleInstallments.map(i => i.id);
+      const { data: linkedCashMovements, error: linkedCashErr } = await supabase.from("cash_movements").select("id, tipo, origem, valor, data, descricao").eq("ref_id", saleId);
+      if (linkedCashErr) throw linkedCashErr;
+
+      if (isCashSaleWithLinkedEntries) {
+        const { error: auditErr } = await (supabase as any).from("audit_logs").insert({
+          user_id: user!.id,
+          action: "delete_cash_sale_with_linked_entries",
+          entity_type: "sale",
+          entity_id: saleId,
+          reason: reason!.trim(),
+          details: {
+            sale: {
+              customer_id: sale.customer_id,
+              customer_name: (sale as any).customers?.nome ?? null,
+              total_venda: sale.total_venda,
+              forma_pagamento: sale.forma_pagamento,
+              data_compra: sale.data_compra,
+              status: sale.status,
+            },
+            linked_cash_movements: linkedCashMovements ?? [],
+          },
+        });
+        if (auditErr) throw auditErr;
+      }
+
       if (installmentIds.length > 0) {
         const { error: cashInstallmentsErr } = await supabase.from("cash_movements").delete().in("ref_id", installmentIds);
         if (cashInstallmentsErr) throw cashInstallmentsErr;
@@ -293,6 +319,8 @@ export default function Vendas() {
       queryClient.invalidateQueries({ queryKey: ["installments"] });
       queryClient.invalidateQueries({ queryKey: ["products-list"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      setPendingDeleteSale(null);
+      setDeleteReason("");
       toast({ title: "Venda excluída!" });
     },
     onError: (e) => toast({ title: "Erro ao excluir venda", description: e.message, variant: "destructive" }),
