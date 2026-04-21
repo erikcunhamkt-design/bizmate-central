@@ -587,6 +587,7 @@ export default function Vendas() {
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 <SelectItem value="pendente">Pendente</SelectItem>
+                <SelectItem value="parcial">Parcial</SelectItem>
                 <SelectItem value="pago">Pago</SelectItem>
                 <SelectItem value="atrasado">Atrasado</SelectItem>
               </SelectContent>

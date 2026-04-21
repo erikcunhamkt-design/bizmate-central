@@ -233,7 +233,7 @@ export default function Financeiro() {
                     <TableRow key={m.id} className="hover:bg-primary/5 transition-colors">
                       <TableCell className="text-sm">{format(new Date(m.data), "dd/MM")}</TableCell>
                       <TableCell className="text-sm">{m.descricao || "—"}</TableCell>
-                      <TableCell><span className="capitalize text-xs bg-muted px-2 py-0.5 rounded-md">{m.origem}</span></TableCell>
+                      <TableCell><span className="capitalize text-xs bg-muted px-2 py-0.5 rounded-md">{m.origem === "recebimento" ? "Recebimento parcelado" : m.origem}</span></TableCell>
                       <TableCell className={`font-semibold text-sm ${m.tipo === "entrada" ? "text-success" : "text-destructive"}`}>
                         {m.tipo === "entrada" ? "+" : "−"}{formatBRL(m.valor)}
                       </TableCell>
