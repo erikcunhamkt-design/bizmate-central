@@ -183,13 +183,13 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
 
   const salesWithInstallments = new Set(installments.map(i => i.sale_id));
   const totalComprado = sales.reduce((s, sale) => s + sale.total_venda, 0);
-  const totalPago = installments.filter(i => i.status === "pago").reduce((s, i) => s + (i.pago_valor ?? i.valor_parcela), 0);
+  const totalPago = installments.reduce((s, i) => s + getPaidValue(i), 0);
   const vendasSemParcela = sales.filter(s => !salesWithInstallments.has(s.id)).reduce((s, sale) => s + sale.total_venda, 0);
   const totalPagoGeral = totalPago + vendasSemParcela;
-  const totalDevendo = installments.filter(i => i.status === "pendente").reduce((s, i) => s + i.valor_parcela, 0);
+  const totalDevendo = installments.filter(i => i.status !== "pago").reduce((s, i) => s + getRemainingValue(i), 0);
 
   const today = new Date();
-  const overdue = installments.filter(i => i.status === "pendente" && new Date(i.vencimento_data) < today);
+  const overdue = installments.filter(i => i.status !== "pago" && getRemainingValue(i) > 0 && new Date(i.vencimento_data) < today);
   const isOverdue = overdue.length > 0;
 
   const lastPurchaseDate = sales.length > 0 ? new Date(sales[0].data_compra) : null;
@@ -211,11 +211,12 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     const saleInstallments = installments.filter(i => i.sale_id === sale.id);
     const isInstallmentSale = sale.forma_pagamento === "parcelado" || saleInstallments.length > 0;
     const paid = isInstallmentSale
-      ? saleInstallments.filter(i => i.status === "pago").reduce((sum, i) => sum + (i.pago_valor ?? i.valor_parcela), 0)
+      ? saleInstallments.reduce((sum, i) => sum + getPaidValue(i), 0)
       : sale.total_venda;
     const pending = Math.max(sale.total_venda - paid, 0);
     return { sale, paid, pending };
   });
+  const receivingPreview = receivingInstallment ? buildAllocationPreview(installments as any, receivingInstallment.id, parseFloat(receiveForm.valor) || 0) : [];
 
   const getStatusLabel = () => {
     if (isOverdue) return { label: `${overdue.length} parcela(s) atrasada(s)`, color: "text-destructive", bg: "bg-destructive/10", icon: AlertTriangle };
