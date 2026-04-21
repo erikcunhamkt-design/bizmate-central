@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { motion } from "framer-motion";
 import { PaginationControls } from "@/components/PaginationControls";
 
@@ -60,6 +61,8 @@ export default function Vendas() {
   const [manualTotal, setManualTotal] = useState("");
   const [editingInstallment, setEditingInstallment] = useState<{ id: string; valor: string; vencimento: string } | null>(null);
   const [editingSale, setEditingSale] = useState<{ id: string; customer_id: string; total: string; forma_pagamento: string; data_compra: string } | null>(null);
+  const [pendingDeleteSale, setPendingDeleteSale] = useState<any | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
 
   const { data: sales = [], isLoading: salesLoading } = useQuery({
     queryKey: ["sales", user?.id],
@@ -255,14 +258,40 @@ export default function Vendas() {
   const totalVendaAtual = parcelado ? parseFloat(valorTotalParcelado) || 0 : totalCart;
 
   const deleteSale = useMutation({
-    mutationFn: async (saleId: string) => {
+    mutationFn: async ({ saleId, reason }: { saleId: string; reason?: string }) => {
       const sale = sales.find(s => s.id === saleId);
       if (!sale) throw new Error("Venda não encontrada");
       const saleInstallments = installments.filter(i => i.sale_id === saleId);
       const hasPaidInstallments = saleInstallments.some(i => i.status === "pago");
-      if ((sale.status === "pago" || hasPaidInstallments) && !window.confirm("Esta venda possui pagamento registrado. Deseja excluir a venda e os lançamentos financeiros vinculados?")) return;
+      const isCashSaleWithLinkedEntries = sale.forma_pagamento !== "parcelado" && sale.status === "pago";
+      if (isCashSaleWithLinkedEntries && !reason?.trim()) throw new Error("Informe o motivo da exclusão");
 
       const installmentIds = saleInstallments.map(i => i.id);
+      const { data: linkedCashMovements, error: linkedCashErr } = await supabase.from("cash_movements").select("id, tipo, origem, valor, data, descricao").eq("ref_id", saleId);
+      if (linkedCashErr) throw linkedCashErr;
+
+      if (isCashSaleWithLinkedEntries) {
+        const { error: auditErr } = await (supabase as any).from("audit_logs").insert({
+          user_id: user!.id,
+          action: "delete_cash_sale_with_linked_entries",
+          entity_type: "sale",
+          entity_id: saleId,
+          reason: reason!.trim(),
+          details: {
+            sale: {
+              customer_id: sale.customer_id,
+              customer_name: (sale as any).customers?.nome ?? null,
+              total_venda: sale.total_venda,
+              forma_pagamento: sale.forma_pagamento,
+              data_compra: sale.data_compra,
+              status: sale.status,
+            },
+            linked_cash_movements: linkedCashMovements ?? [],
+          },
+        });
+        if (auditErr) throw auditErr;
+      }
+
       if (installmentIds.length > 0) {
         const { error: cashInstallmentsErr } = await supabase.from("cash_movements").delete().in("ref_id", installmentIds);
         if (cashInstallmentsErr) throw cashInstallmentsErr;
@@ -290,6 +319,8 @@ export default function Vendas() {
       queryClient.invalidateQueries({ queryKey: ["installments"] });
       queryClient.invalidateQueries({ queryKey: ["products-list"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      setPendingDeleteSale(null);
+      setDeleteReason("");
       toast({ title: "Venda excluída!" });
     },
     onError: (e) => toast({ title: "Erro ao excluir venda", description: e.message, variant: "destructive" }),
@@ -431,7 +462,14 @@ export default function Vendas() {
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
                           )}
-                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => deleteSale.mutate(s.id)} disabled={deleteSale.isPending}>
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => {
+                            if (s.forma_pagamento !== "parcelado" && s.status === "pago") {
+                              setPendingDeleteSale(s);
+                              setDeleteReason("");
+                              return;
+                            }
+                            deleteSale.mutate({ saleId: s.id });
+                          }} disabled={deleteSale.isPending}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
@@ -649,6 +687,35 @@ export default function Vendas() {
                 <div className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
               ) : "Registrar Venda"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pendingDeleteSale} onOpenChange={(open) => { if (!open) { setPendingDeleteSale(null); setDeleteReason(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center">
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </div>
+              Confirmar exclusão
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border/50 bg-muted/40 p-3 text-sm">
+              <p className="font-semibold">Venda à vista com lançamento vinculado</p>
+              <p className="text-muted-foreground">{pendingDeleteSale ? `${(pendingDeleteSale as any).customers?.nome ?? "Cliente"} • ${formatBRL(pendingDeleteSale.total_venda)}` : ""}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Motivo/observação obrigatório</Label>
+              <Textarea value={deleteReason} onChange={e => setDeleteReason(e.target.value)} placeholder="Ex: venda lançada em duplicidade, cancelamento confirmado..." className="min-h-24 resize-none" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setPendingDeleteSale(null); setDeleteReason(""); }}>Cancelar</Button>
+              <Button variant="destructive" disabled={!deleteReason.trim() || deleteSale.isPending} onClick={() => pendingDeleteSale && deleteSale.mutate({ saleId: pendingDeleteSale.id, reason: deleteReason })}>
+                {deleteSale.isPending ? "Excluindo..." : "Excluir e auditar"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
