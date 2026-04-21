@@ -690,6 +690,35 @@ export default function Vendas() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!pendingDeleteSale} onOpenChange={(open) => { if (!open) { setPendingDeleteSale(null); setDeleteReason(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center">
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </div>
+              Confirmar exclusão
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border/50 bg-muted/40 p-3 text-sm">
+              <p className="font-semibold">Venda à vista com lançamento vinculado</p>
+              <p className="text-muted-foreground">{pendingDeleteSale ? `${(pendingDeleteSale as any).customers?.nome ?? "Cliente"} • ${formatBRL(pendingDeleteSale.total_venda)}` : ""}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Motivo/observação obrigatório</Label>
+              <Textarea value={deleteReason} onChange={e => setDeleteReason(e.target.value)} placeholder="Ex: venda lançada em duplicidade, cancelamento confirmado..." className="min-h-24 resize-none" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setPendingDeleteSale(null); setDeleteReason(""); }}>Cancelar</Button>
+              <Button variant="destructive" disabled={!deleteReason.trim() || deleteSale.isPending} onClick={() => pendingDeleteSale && deleteSale.mutate({ saleId: pendingDeleteSale.id, reason: deleteReason })}>
+                {deleteSale.isPending ? "Excluindo..." : "Excluir e auditar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }
