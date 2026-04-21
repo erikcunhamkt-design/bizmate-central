@@ -12,7 +12,7 @@ export function useDashboardData() {
   const em7dias = format(addDays(now, 7), "yyyy-MM-dd");
 
   const installments = useQuery({
-    queryKey: ["dashboard-installments", user?.id, mesInicio],
+    queryKey: ["dashboard", "installments", user?.id, mesInicio],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("installments")
@@ -27,7 +27,7 @@ export function useDashboardData() {
 
   // Overdue installments (before today, still pending)
   const overdueQuery = useQuery({
-    queryKey: ["dashboard-overdue", user?.id, hoje],
+    queryKey: ["dashboard", "overdue", user?.id, hoje],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("installments")
@@ -43,7 +43,7 @@ export function useDashboardData() {
 
   // Upcoming installments (today + next 7 days, pending)
   const upcomingQuery = useQuery({
-    queryKey: ["dashboard-upcoming", user?.id, hoje],
+    queryKey: ["dashboard", "upcoming", user?.id, hoje],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("installments")
@@ -59,7 +59,7 @@ export function useDashboardData() {
   });
 
   const expenses = useQuery({
-    queryKey: ["dashboard-expenses", user?.id, mesInicio],
+    queryKey: ["dashboard", "expenses", user?.id, mesInicio],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("expenses")
@@ -73,7 +73,7 @@ export function useDashboardData() {
   });
 
   const cashMovements = useQuery({
-    queryKey: ["dashboard-cash", user?.id, mesInicio],
+    queryKey: ["dashboard", "cash", user?.id, mesInicio],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cash_movements")
