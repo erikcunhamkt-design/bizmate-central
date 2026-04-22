@@ -525,7 +525,9 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-sm font-semibold text-success">{formatBRL(payment.valor_total)}</p>
-                              <p className="text-xs text-muted-foreground capitalize">{format(new Date(payment.data_pagamento), "dd/MM/yyyy")} • {payment.metodo_recebimento}</p>
+                              <p className="text-xs text-muted-foreground capitalize">
+                                {format(new Date(payment.data_pagamento), "dd/MM/yyyy")} • {payment.metodo_recebimento} • {payment.operador ?? "Sem operador"}
+                              </p>
                               {payment.observacoes && <p className="text-xs text-muted-foreground mt-1">{payment.observacoes}</p>}
                             </div>
                             <span className="text-[11px] bg-success/10 text-success border border-success/20 rounded-md px-2 py-0.5 font-semibold">Recebimento</span>
@@ -537,6 +539,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                                 <div key={allocation.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs border-b last:border-b-0 border-border/40">
                                   <span className="text-muted-foreground">
                                     {allocation.tipo === "abatimento" ? "Abatimento" : "Parcela"} {installment ? `${installment.numero_parcela}/${installment.total_parcelas}` : "removida"}
+                                    <span className="block text-[10px] capitalize">{format(new Date(payment.data_pagamento), "dd/MM/yyyy")} • {payment.metodo_recebimento} • {payment.operador ?? "Sem operador"}</span>
                                   </span>
                                   <span className="font-semibold">{formatBRL(allocation.valor_aplicado)}</span>
                                 </div>
