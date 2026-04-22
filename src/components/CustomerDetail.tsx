@@ -15,6 +15,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
 import { useToast } from "@/hooks/use-toast";
 import { buildAllocationPreview, getPaidValue, getRemainingValue } from "@/lib/receivables";
+import { useOperator } from "@/hooks/useOperator";
 import {
   ShoppingCart, CheckCircle, AlertTriangle, Package, MapPin, User,
   Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX, CreditCard
@@ -27,6 +28,7 @@ type CustomerPayment = {
   data_pagamento: string;
   metodo_recebimento: string;
   observacoes: string | null;
+  operador: string | null;
 };
 
 type PaymentAllocation = {
@@ -45,6 +47,7 @@ interface CustomerDetailProps {
 
 export function CustomerDetail({ customerId, customerName, onClose }: CustomerDetailProps) {
   const { toast } = useToast();
+  const { operator } = useOperator();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ nome: "", whatsapp: "", email: "", cpf: "", endereco: "", observacoes: "", foto_url: "" });
@@ -86,7 +89,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     queryFn: async () => {
       const { data: payments, error: paymentsError } = await (supabase as any)
         .from("customer_payments")
-        .select("id, sale_id, valor_total, data_pagamento, metodo_recebimento, observacoes")
+        .select("id, sale_id, valor_total, data_pagamento, metodo_recebimento, observacoes, operador")
         .eq("customer_id", customerId!)
         .order("data_pagamento", { ascending: false });
       if (paymentsError) throw paymentsError;
@@ -159,6 +162,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
         data_pagamento: receiveForm.data,
         metodo_recebimento: receiveForm.metodo,
         observacoes: receiveForm.observacoes || null,
+        operador: operator,
       }).select().single();
       if (paymentError) throw paymentError;
 
