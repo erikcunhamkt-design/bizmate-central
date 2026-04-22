@@ -200,6 +200,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
       queryClient.invalidateQueries({ queryKey: ["monthly-sales"] });
       queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
       queryClient.invalidateQueries({ queryKey: ["cash-movements"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-payment-history", customerId] });
       setReceivingInstallment(null);
       setReceiveForm({ valor: "", data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
       toast({ title: "Recebimento registrado!" });
