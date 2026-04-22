@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GlobalSearch } from "@/components/GlobalSearch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useOperator } from "@/hooks/useOperator";
 
 const pageTitles: Record<string, string> = {
   "/": "Dashboard",
@@ -21,6 +23,7 @@ export default function AppLayout() {
   const location = useLocation();
   const currentTitle = pageTitles[location.pathname] ?? "";
   const [searchOpen, setSearchOpen] = useState(false);
+  const { operator, setOperator } = useOperator();
 
   return (
     <SidebarProvider>
@@ -45,6 +48,15 @@ export default function AppLayout() {
                 Ctrl+K
               </kbd>
             </Button>
+            <Select value={operator} onValueChange={(value) => setOperator(value as "Catia" | "Erik")}>
+              <SelectTrigger className="h-9 w-[116px] bg-card border-border/50 text-xs font-semibold">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Catia">Catia</SelectItem>
+                <SelectItem value="Erik">Erik</SelectItem>
+              </SelectContent>
+            </Select>
           </header>
           <main className="flex-1 p-6 overflow-auto">
             <AnimatePresence mode="wait">
