@@ -834,6 +834,10 @@ export default function Vendas() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="rounded-xl border border-border/50 bg-muted/30 p-3">
+                <p className="text-xs text-muted-foreground">Operador</p>
+                <p className="text-sm font-semibold">{operator}</p>
+              </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Observação</Label>
                 <Textarea value={receiveForm.observacoes} onChange={e => setReceiveForm(f => ({ ...f, observacoes: e.target.value }))} className="resize-none" rows={2} />
