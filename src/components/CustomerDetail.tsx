@@ -20,6 +20,23 @@ import {
   Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX, CreditCard
 } from "lucide-react";
 
+type CustomerPayment = {
+  id: string;
+  sale_id: string | null;
+  valor_total: number;
+  data_pagamento: string;
+  metodo_recebimento: string;
+  observacoes: string | null;
+};
+
+type PaymentAllocation = {
+  id: string;
+  payment_id: string;
+  installment_id: string;
+  valor_aplicado: number;
+  tipo: string;
+};
+
 interface CustomerDetailProps {
   customerId: string | null;
   customerName: string;
@@ -60,6 +77,30 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
       const { data, error } = await supabase.from("installments").select("*").eq("customer_id", customerId!).order("vencimento_data");
       if (error) throw error;
       return data;
+    },
+    enabled: !!customerId,
+  });
+
+  const { data: paymentHistory = { payments: [] as CustomerPayment[], allocations: [] as PaymentAllocation[] } } = useQuery({
+    queryKey: ["customer-payment-history", customerId],
+    queryFn: async () => {
+      const { data: payments, error: paymentsError } = await (supabase as any)
+        .from("customer_payments")
+        .select("id, sale_id, valor_total, data_pagamento, metodo_recebimento, observacoes")
+        .eq("customer_id", customerId!)
+        .order("data_pagamento", { ascending: false });
+      if (paymentsError) throw paymentsError;
+
+      const paymentIds = (payments ?? []).map((payment: CustomerPayment) => payment.id);
+      if (paymentIds.length === 0) return { payments: [], allocations: [] };
+
+      const { data: allocations, error: allocationsError } = await (supabase as any)
+        .from("payment_allocations")
+        .select("id, payment_id, installment_id, valor_aplicado, tipo")
+        .in("payment_id", paymentIds);
+      if (allocationsError) throw allocationsError;
+
+      return { payments: payments ?? [], allocations: allocations ?? [] };
     },
     enabled: !!customerId,
   });
