@@ -130,6 +130,7 @@ export type Database = {
           id: string
           metodo_recebimento: string
           observacoes: string | null
+          operador: string | null
           sale_id: string | null
           user_id: string
           valor_total: number
@@ -141,6 +142,7 @@ export type Database = {
           id?: string
           metodo_recebimento?: string
           observacoes?: string | null
+          operador?: string | null
           sale_id?: string | null
           user_id: string
           valor_total: number
@@ -152,6 +154,7 @@ export type Database = {
           id?: string
           metodo_recebimento?: string
           observacoes?: string | null
+          operador?: string | null
           sale_id?: string | null
           user_id?: string
           valor_total?: number
