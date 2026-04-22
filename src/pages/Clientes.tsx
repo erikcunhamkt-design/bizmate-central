@@ -115,18 +115,29 @@ export default function Clientes() {
     onError: () => toast({ title: "Erro ao atualizar status", variant: "destructive" }),
   });
 
-  const filtered = customers
+  const lastPurchaseMap = new Map<string, Date>();
+  for (const sale of sales) {
+    if (!lastPurchaseMap.has(sale.customer_id)) lastPurchaseMap.set(sale.customer_id, new Date(sale.data_compra));
+  }
+
+  const customersWithActivity = customers.map(c => {
+    const customerInstallments = installments.filter(i => i.customer_id === c.id && getRemainingValue(i as any) > 0);
+    const activity = getCustomerActivityStatus(lastPurchaseMap.get(c.id) ?? null, customerInstallments as any);
+    return { ...c, activityStatus: activity.isActive ? "ativo" : "inativo", activity };
+  });
+
+  const filtered = customersWithActivity
     .filter(c => {
       const matchSearch = c.nome.toLowerCase().includes(search.toLowerCase()) ||
         c.whatsapp?.includes(search) || c.email?.toLowerCase().includes(search.toLowerCase());
-      const matchStatus = statusFilter === "todos" || c.status === statusFilter;
+      const matchStatus = statusFilter === "todos" || c.activityStatus === statusFilter;
       return matchSearch && matchStatus;
     })
     .sort((a, b) => sortDir === "asc" ? a.nome.localeCompare(b.nome) : b.nome.localeCompare(a.nome));
 
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const totalAtivos = customers.filter(c => c.status === "ativo").length;
-  const totalInativos = customers.filter(c => c.status === "inativo").length;
+  const totalAtivos = customersWithActivity.filter(c => c.activityStatus === "ativo").length;
+  const totalInativos = customersWithActivity.filter(c => c.activityStatus === "inativo").length;
 
   // Reset page when filters change
   const handleSearchChange = (v: string) => { setSearch(v); setPage(1); };
