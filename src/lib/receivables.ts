@@ -1,3 +1,5 @@
+import { differenceInDays } from "date-fns";
+
 export type ReceivableInstallment = {
   id: string;
   sale_id?: string | null;
@@ -25,6 +27,28 @@ export const getRemainingValue = (installment: Pick<ReceivableInstallment, "valo
 
 export const isOpenInstallment = (installment: ReceivableInstallment) =>
   installment.status !== "pago" && getRemainingValue(installment) > 0.009;
+
+export const hasOpenInstallmentDebt = (installments: ReceivableInstallment[]) =>
+  installments.some(isOpenInstallment);
+
+export function getCustomerActivityStatus(
+  lastPurchaseDate: Date | string | null,
+  installments: ReceivableInstallment[],
+  now = new Date(),
+) {
+  const normalizedLastPurchase = lastPurchaseDate ? new Date(lastPurchaseDate) : null;
+  const daysSinceLastPurchase = normalizedLastPurchase ? differenceInDays(now, normalizedLastPurchase) : null;
+  const hasOpenDebt = hasOpenInstallmentDebt(installments);
+  const boughtInLast30Days = daysSinceLastPurchase !== null && daysSinceLastPurchase <= 30;
+
+  return {
+    hasOpenDebt,
+    boughtInLast30Days,
+    daysSinceLastPurchase,
+    isActive: hasOpenDebt || boughtInLast30Days,
+    isInactive: !hasOpenDebt && !boughtInLast30Days,
+  };
+}
 
 export function buildAllocationPreview(
   installments: ReceivableInstallment[],

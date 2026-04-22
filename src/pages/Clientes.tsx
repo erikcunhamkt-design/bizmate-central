@@ -18,6 +18,7 @@ import { CustomerDetail } from "@/components/CustomerDetail";
 import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
 import { PaginationControls } from "@/components/PaginationControls";
 import { InactiveClientsWhatsApp } from "@/components/InactiveClientsWhatsApp";
+import { getCustomerActivityStatus, getRemainingValue } from "@/lib/receivables";
 import { motion } from "framer-motion";
 
 const PAGE_SIZE = 15;
@@ -48,6 +49,26 @@ export default function Clientes() {
       const { data, error } = await supabase.from("customers").select("*").order("nome");
       if (error) throw error;
       return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: sales = [] } = useQuery({
+    queryKey: ["customers-activity-sales", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("sales").select("customer_id, data_compra").order("data_compra", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user,
+  });
+
+  const { data: installments = [] } = useQuery({
+    queryKey: ["customers-activity-installments", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("installments").select("id, customer_id, sale_id, valor_parcela, pago_valor, vencimento_data, numero_parcela, total_parcelas, status");
+      if (error) throw error;
+      return data ?? [];
     },
     enabled: !!user,
   });
@@ -94,18 +115,29 @@ export default function Clientes() {
     onError: () => toast({ title: "Erro ao atualizar status", variant: "destructive" }),
   });
 
-  const filtered = customers
+  const lastPurchaseMap = new Map<string, Date>();
+  for (const sale of sales) {
+    if (!lastPurchaseMap.has(sale.customer_id)) lastPurchaseMap.set(sale.customer_id, new Date(sale.data_compra));
+  }
+
+  const customersWithActivity = customers.map(c => {
+    const customerInstallments = installments.filter(i => i.customer_id === c.id && getRemainingValue(i as any) > 0);
+    const activity = getCustomerActivityStatus(lastPurchaseMap.get(c.id) ?? null, customerInstallments as any);
+    return { ...c, activityStatus: activity.isActive ? "ativo" : "inativo", activity };
+  });
+
+  const filtered = customersWithActivity
     .filter(c => {
       const matchSearch = c.nome.toLowerCase().includes(search.toLowerCase()) ||
         c.whatsapp?.includes(search) || c.email?.toLowerCase().includes(search.toLowerCase());
-      const matchStatus = statusFilter === "todos" || c.status === statusFilter;
+      const matchStatus = statusFilter === "todos" || c.activityStatus === statusFilter;
       return matchSearch && matchStatus;
     })
     .sort((a, b) => sortDir === "asc" ? a.nome.localeCompare(b.nome) : b.nome.localeCompare(a.nome));
 
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const totalAtivos = customers.filter(c => c.status === "ativo").length;
-  const totalInativos = customers.filter(c => c.status === "inativo").length;
+  const totalAtivos = customersWithActivity.filter(c => c.activityStatus === "ativo").length;
+  const totalInativos = customersWithActivity.filter(c => c.activityStatus === "inativo").length;
 
   // Reset page when filters change
   const handleSearchChange = (v: string) => { setSearch(v); setPage(1); };
@@ -224,22 +256,14 @@ export default function Clientes() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={`gap-1.5 text-xs font-semibold px-2.5 py-1 h-7 rounded-full ${
-                        c.status === "ativo"
-                          ? "bg-success/10 text-success hover:bg-success/20"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      }`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleStatusMutation.mutate({ id: c.id, newStatus: c.status === "ativo" ? "inativo" : "ativo" });
-                      }}
-                    >
-                      {c.status === "ativo" ? <UserCheck className="h-3 w-3" /> : <UserX className="h-3 w-3" />}
-                      {c.status}
-                    </Button>
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                      c.activityStatus === "ativo"
+                        ? "bg-success/10 text-success"
+                        : "bg-muted text-muted-foreground"
+                    }`}>
+                      {c.activityStatus === "ativo" ? <UserCheck className="h-3 w-3" /> : <UserX className="h-3 w-3" />}
+                      {c.activityStatus}
+                    </span>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
