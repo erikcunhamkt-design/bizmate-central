@@ -18,6 +18,7 @@ import { CustomerDetail } from "@/components/CustomerDetail";
 import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
 import { PaginationControls } from "@/components/PaginationControls";
 import { InactiveClientsWhatsApp } from "@/components/InactiveClientsWhatsApp";
+import { getCustomerActivityStatus, getRemainingValue } from "@/lib/receivables";
 import { motion } from "framer-motion";
 
 const PAGE_SIZE = 15;
@@ -48,6 +49,26 @@ export default function Clientes() {
       const { data, error } = await supabase.from("customers").select("*").order("nome");
       if (error) throw error;
       return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: sales = [] } = useQuery({
+    queryKey: ["customers-activity-sales", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("sales").select("customer_id, data_compra").order("data_compra", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user,
+  });
+
+  const { data: installments = [] } = useQuery({
+    queryKey: ["customers-activity-installments", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("installments").select("id, customer_id, sale_id, valor_parcela, pago_valor, vencimento_data, numero_parcela, total_parcelas, status");
+      if (error) throw error;
+      return data ?? [];
     },
     enabled: !!user,
   });
