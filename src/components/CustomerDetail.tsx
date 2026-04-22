@@ -258,6 +258,13 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     return { sale, paid, pending };
   });
   const receivingPreview = receivingInstallment ? buildAllocationPreview(installments as any, receivingInstallment.id, parseFloat(receiveForm.valor) || 0) : [];
+  const paymentHistoryBySale = sales.map((sale) => {
+    const salePayments = paymentHistory.payments.filter((payment) => payment.sale_id === sale.id);
+    const salePaymentIds = new Set(salePayments.map((payment) => payment.id));
+    const saleAllocations = paymentHistory.allocations.filter((allocation) => salePaymentIds.has(allocation.payment_id));
+    const totalReceived = salePayments.reduce((sum, payment) => sum + Number(payment.valor_total ?? 0), 0);
+    return { sale, payments: salePayments, allocations: saleAllocations, totalReceived };
+  }).filter((row) => row.payments.length > 0);
 
   const getStatusLabel = () => {
     if (isOverdue) return { label: `${overdue.length} parcela(s) atrasada(s)`, color: "text-destructive", bg: "bg-destructive/10", icon: AlertTriangle };
