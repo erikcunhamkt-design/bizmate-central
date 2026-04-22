@@ -15,6 +15,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
 import { useToast } from "@/hooks/use-toast";
 import { buildAllocationPreview, getPaidValue, getRemainingValue } from "@/lib/receivables";
+import { useOperator } from "@/hooks/useOperator";
 import {
   ShoppingCart, CheckCircle, AlertTriangle, Package, MapPin, User,
   Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX, CreditCard
@@ -27,6 +28,7 @@ type CustomerPayment = {
   data_pagamento: string;
   metodo_recebimento: string;
   observacoes: string | null;
+  operador: string | null;
 };
 
 type PaymentAllocation = {
@@ -45,6 +47,7 @@ interface CustomerDetailProps {
 
 export function CustomerDetail({ customerId, customerName, onClose }: CustomerDetailProps) {
   const { toast } = useToast();
+  const { operator } = useOperator();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ nome: "", whatsapp: "", email: "", cpf: "", endereco: "", observacoes: "", foto_url: "" });
@@ -86,7 +89,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     queryFn: async () => {
       const { data: payments, error: paymentsError } = await (supabase as any)
         .from("customer_payments")
-        .select("id, sale_id, valor_total, data_pagamento, metodo_recebimento, observacoes")
+        .select("id, sale_id, valor_total, data_pagamento, metodo_recebimento, observacoes, operador")
         .eq("customer_id", customerId!)
         .order("data_pagamento", { ascending: false });
       if (paymentsError) throw paymentsError;
@@ -159,6 +162,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
         data_pagamento: receiveForm.data,
         metodo_recebimento: receiveForm.metodo,
         observacoes: receiveForm.observacoes || null,
+        operador: operator,
       }).select().single();
       if (paymentError) throw paymentError;
 
@@ -521,7 +525,9 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-sm font-semibold text-success">{formatBRL(payment.valor_total)}</p>
-                              <p className="text-xs text-muted-foreground capitalize">{format(new Date(payment.data_pagamento), "dd/MM/yyyy")} • {payment.metodo_recebimento}</p>
+                              <p className="text-xs text-muted-foreground capitalize">
+                                {format(new Date(payment.data_pagamento), "dd/MM/yyyy")} • {payment.metodo_recebimento} • {payment.operador ?? "Sem operador"}
+                              </p>
                               {payment.observacoes && <p className="text-xs text-muted-foreground mt-1">{payment.observacoes}</p>}
                             </div>
                             <span className="text-[11px] bg-success/10 text-success border border-success/20 rounded-md px-2 py-0.5 font-semibold">Recebimento</span>
@@ -533,6 +539,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                                 <div key={allocation.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs border-b last:border-b-0 border-border/40">
                                   <span className="text-muted-foreground">
                                     {allocation.tipo === "abatimento" ? "Abatimento" : "Parcela"} {installment ? `${installment.numero_parcela}/${installment.total_parcelas}` : "removida"}
+                                    <span className="block text-[10px] capitalize">{format(new Date(payment.data_pagamento), "dd/MM/yyyy")} • {payment.metodo_recebimento} • {payment.operador ?? "Sem operador"}</span>
                                   </span>
                                   <span className="font-semibold">{formatBRL(allocation.valor_aplicado)}</span>
                                 </div>
@@ -618,6 +625,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                     <SelectContent><SelectItem value="pix">PIX</SelectItem><SelectItem value="dinheiro">Dinheiro</SelectItem><SelectItem value="cartao">Cartão</SelectItem><SelectItem value="outro">Outro</SelectItem></SelectContent>
                   </Select>
                 </div>
+                <div className="rounded-xl border border-border/50 bg-muted/30 p-3"><p className="text-xs text-muted-foreground">Operador</p><p className="text-sm font-semibold">{operator}</p></div>
                 <div className="space-y-1.5"><Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Observação</Label><Textarea value={receiveForm.observacoes} onChange={e => setReceiveForm(f => ({ ...f, observacoes: e.target.value }))} className="resize-none" rows={2} /></div>
                 {receivingPreview.length > 0 && <div className="rounded-xl border border-border/50 overflow-hidden"><div className="px-3 py-2 bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Aplicação automática</div>{receivingPreview.map(item => <div key={item.installment.id} className="flex items-center justify-between px-3 py-2 border-t border-border/50 text-sm"><span>Parcela {item.installment.numero_parcela}/{item.installment.total_parcelas}</span><span className="font-semibold text-success">{formatBRL(item.amount)} — {item.statusAfter === "pago" ? "paga" : "parcial"}</span></div>)}</div>}
                 <Button className="w-full gradient-primary shadow-glow" onClick={() => receivePaymentMutation.mutate()} disabled={receivePaymentMutation.isPending || receivingPreview.length === 0}>{receivePaymentMutation.isPending ? "Registrando..." : "Registrar recebimento"}</Button>
