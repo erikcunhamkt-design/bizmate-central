@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { motion } from "framer-motion";
 import { PaginationControls } from "@/components/PaginationControls";
 import { buildAllocationPreview, getPaidValue, getRemainingValue } from "@/lib/receivables";
+import { useOperator } from "@/hooks/useOperator";
 
 const PAGE_SIZE = 15;
 
@@ -34,6 +35,7 @@ interface CartItem {
 
 export default function Vendas() {
   const { user } = useAuth();
+  const { operator } = useOperator();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -124,6 +126,7 @@ export default function Vendas() {
         data_pagamento: receiveForm.data,
         metodo_recebimento: receiveForm.metodo,
         observacoes: receiveForm.observacoes || null,
+        operador: operator,
       }).select().single();
       if (paymentError) throw paymentError;
 
