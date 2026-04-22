@@ -20,6 +20,23 @@ import {
   Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX, CreditCard
 } from "lucide-react";
 
+type CustomerPayment = {
+  id: string;
+  sale_id: string | null;
+  valor_total: number;
+  data_pagamento: string;
+  metodo_recebimento: string;
+  observacoes: string | null;
+};
+
+type PaymentAllocation = {
+  id: string;
+  payment_id: string;
+  installment_id: string;
+  valor_aplicado: number;
+  tipo: string;
+};
+
 interface CustomerDetailProps {
   customerId: string | null;
   customerName: string;
@@ -60,6 +77,30 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
       const { data, error } = await supabase.from("installments").select("*").eq("customer_id", customerId!).order("vencimento_data");
       if (error) throw error;
       return data;
+    },
+    enabled: !!customerId,
+  });
+
+  const { data: paymentHistory = { payments: [] as CustomerPayment[], allocations: [] as PaymentAllocation[] } } = useQuery({
+    queryKey: ["customer-payment-history", customerId],
+    queryFn: async () => {
+      const { data: payments, error: paymentsError } = await (supabase as any)
+        .from("customer_payments")
+        .select("id, sale_id, valor_total, data_pagamento, metodo_recebimento, observacoes")
+        .eq("customer_id", customerId!)
+        .order("data_pagamento", { ascending: false });
+      if (paymentsError) throw paymentsError;
+
+      const paymentIds = (payments ?? []).map((payment: CustomerPayment) => payment.id);
+      if (paymentIds.length === 0) return { payments: [], allocations: [] };
+
+      const { data: allocations, error: allocationsError } = await (supabase as any)
+        .from("payment_allocations")
+        .select("id, payment_id, installment_id, valor_aplicado, tipo")
+        .in("payment_id", paymentIds);
+      if (allocationsError) throw allocationsError;
+
+      return { payments: payments ?? [], allocations: allocations ?? [] };
     },
     enabled: !!customerId,
   });
@@ -159,6 +200,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
       queryClient.invalidateQueries({ queryKey: ["monthly-sales"] });
       queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
       queryClient.invalidateQueries({ queryKey: ["cash-movements"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-payment-history", customerId] });
       setReceivingInstallment(null);
       setReceiveForm({ valor: "", data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
       toast({ title: "Recebimento registrado!" });
@@ -217,6 +259,13 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     return { sale, paid, pending };
   });
   const receivingPreview = receivingInstallment ? buildAllocationPreview(installments as any, receivingInstallment.id, parseFloat(receiveForm.valor) || 0) : [];
+  const paymentHistoryBySale = sales.map((sale) => {
+    const salePayments = paymentHistory.payments.filter((payment) => payment.sale_id === sale.id);
+    const salePaymentIds = new Set(salePayments.map((payment) => payment.id));
+    const saleAllocations = paymentHistory.allocations.filter((allocation) => salePaymentIds.has(allocation.payment_id));
+    const totalReceived = salePayments.reduce((sum, payment) => sum + Number(payment.valor_total ?? 0), 0);
+    return { sale, payments: salePayments, allocations: saleAllocations, totalReceived };
+  }).filter((row) => row.payments.length > 0);
 
   const getStatusLabel = () => {
     if (isOverdue) return { label: `${overdue.length} parcela(s) atrasada(s)`, color: "text-destructive", bg: "bg-destructive/10", icon: AlertTriangle };
@@ -442,6 +491,60 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          </div>
+        )}
+
+        {paymentHistoryBySale.length > 0 && (
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
+              <CreditCard className="h-3.5 w-3.5" /> Histórico de pagamentos/abatimentos
+            </h3>
+            <div className="space-y-3">
+              {paymentHistoryBySale.map(({ sale, payments, allocations, totalReceived }) => (
+                <div key={sale.id} className="border border-border/50 rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between gap-3 bg-muted/30 px-3 py-2 border-b border-border/50">
+                    <div>
+                      <p className="text-sm font-semibold">Venda de {format(new Date(sale.data_compra), "dd/MM/yyyy")}</p>
+                      <p className="text-xs text-muted-foreground">Total da venda: {formatBRL(sale.total_venda)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Recebido</p>
+                      <p className="text-sm font-bold text-success">{formatBRL(totalReceived)}</p>
+                    </div>
+                  </div>
+                  <div className="divide-y divide-border/50">
+                    {payments.map((payment) => {
+                      const paymentAllocations = allocations.filter((allocation) => allocation.payment_id === payment.id);
+                      return (
+                        <div key={payment.id} className="p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-success">{formatBRL(payment.valor_total)}</p>
+                              <p className="text-xs text-muted-foreground capitalize">{format(new Date(payment.data_pagamento), "dd/MM/yyyy")} • {payment.metodo_recebimento}</p>
+                              {payment.observacoes && <p className="text-xs text-muted-foreground mt-1">{payment.observacoes}</p>}
+                            </div>
+                            <span className="text-[11px] bg-success/10 text-success border border-success/20 rounded-md px-2 py-0.5 font-semibold">Recebimento</span>
+                          </div>
+                          <div className="rounded-lg bg-muted/30 border border-border/40 overflow-hidden">
+                            {paymentAllocations.map((allocation) => {
+                              const installment = installments.find((item) => item.id === allocation.installment_id);
+                              return (
+                                <div key={allocation.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs border-b last:border-b-0 border-border/40">
+                                  <span className="text-muted-foreground">
+                                    {allocation.tipo === "abatimento" ? "Abatimento" : "Parcela"} {installment ? `${installment.numero_parcela}/${installment.total_parcelas}` : "removida"}
+                                  </span>
+                                  <span className="font-semibold">{formatBRL(allocation.valor_aplicado)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
