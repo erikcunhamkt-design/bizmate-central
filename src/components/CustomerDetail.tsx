@@ -239,8 +239,9 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
   const isOverdue = overdue.length > 0;
 
   const lastPurchaseDate = sales.length > 0 ? new Date(sales[0].data_compra) : null;
-  const daysSinceLastPurchase = lastPurchaseDate ? differenceInDays(today, lastPurchaseDate) : null;
-  const isInactive = daysSinceLastPurchase !== null && daysSinceLastPurchase > 30;
+  const activity = getCustomerActivityStatus(lastPurchaseDate, installments as any, today);
+  const daysSinceLastPurchase = activity.daysSinceLastPurchase;
+  const isInactive = activity.isInactive;
 
   const productMap = new Map<string, { nome: string; qtd: number; total: number }>();
   for (const sale of sales) {
