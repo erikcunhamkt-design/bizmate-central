@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { getCustomerActivityStatus, getRemainingValue } from "@/lib/receivables";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { differenceInDays, format } from "date-fns";
+import { format } from "date-fns";
 import { MessageCircle, Clock, AlertTriangle, Send, Pencil } from "lucide-react";
 
 export function InactiveClientsWhatsApp() {
@@ -17,7 +18,7 @@ export function InactiveClientsWhatsApp() {
   const { data: customers = [] } = useQuery({
     queryKey: ["customers", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("customers").select("*").eq("status", "ativo").order("nome");
+      const { data, error } = await supabase.from("customers").select("*").order("nome");
       if (error) throw error;
       return data;
     },
@@ -28,6 +29,16 @@ export function InactiveClientsWhatsApp() {
     queryKey: ["all-sales-for-inactive", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase.from("sales").select("customer_id, data_compra").order("data_compra", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: installments = [] } = useQuery({
+    queryKey: ["all-installments-for-activity", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("installments").select("id, customer_id, sale_id, valor_parcela, pago_valor, vencimento_data, numero_parcela, total_parcelas, status");
       if (error) throw error;
       return data;
     },
@@ -45,10 +56,11 @@ export function InactiveClientsWhatsApp() {
   const inactiveClients = customers
     .map(c => {
       const lastPurchase = lastPurchaseMap.get(c.id);
-      const daysSince = lastPurchase ? differenceInDays(today, lastPurchase) : null;
-      return { ...c, lastPurchase, daysSince };
+      const customerInstallments = installments.filter(i => i.customer_id === c.id && getRemainingValue(i as any) > 0);
+      const activity = getCustomerActivityStatus(lastPurchase ?? null, customerInstallments as any, today);
+      return { ...c, lastPurchase, daysSince: activity.daysSinceLastPurchase, isInactive: activity.isInactive };
     })
-    .filter(c => (c.daysSince !== null && c.daysSince > 30) || c.daysSince === null)
+    .filter(c => c.isInactive)
     .filter(c => c.whatsapp)
     .sort((a, b) => (b.daysSince ?? 999) - (a.daysSince ?? 999));
 
