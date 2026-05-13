@@ -475,12 +475,12 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
             <div className="space-y-3">
               {paymentHistoryBySale.map(({ sale, payments, allocations, totalReceived }) => (
                 <div key={sale.id} className="border border-border/50 rounded-xl overflow-hidden">
-                  <div className="flex items-center justify-between gap-3 bg-muted/30 px-3 py-2 border-b border-border/50">
-                    <div>
-                      <p className="text-sm font-semibold">Venda de {format(new Date(sale.data_compra), "dd/MM/yyyy")}</p>
-                      <p className="text-xs text-muted-foreground">Total da venda: {formatBRL(sale.total_venda)}</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2 bg-muted/30 px-3 py-2 border-b border-border/50">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">Venda de {format(new Date(sale.data_compra), "dd/MM/yyyy")}</p>
+                      <p className="text-xs text-muted-foreground truncate">Total da venda: {formatBRL(sale.total_venda)}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <p className="text-xs text-muted-foreground">Recebido</p>
                       <p className="text-sm font-bold text-success">{formatBRL(totalReceived)}</p>
                     </div>
