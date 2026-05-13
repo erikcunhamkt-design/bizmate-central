@@ -167,7 +167,7 @@ export default function Clientes() {
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2 gradient-primary shadow-glow"><UserPlus className="h-4 w-4" />Novo Cliente</Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogContent>
             <DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <CustomerPhotoUpload currentUrl={fotoUrl || null} onUpload={setFotoUrl} onRemove={() => setFotoUrl("")} />
