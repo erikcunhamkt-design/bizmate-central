@@ -13,8 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { UserPlus, Search, Mail, MessageCircle, Eye, Trash2, Users, SortAsc, SortDesc, UserCheck, UserX } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
-import { CustomerDetail } from "@/components/CustomerDetail";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { CustomerPhotoUpload } from "@/components/CustomerPhotoUpload";
 import { PaginationControls } from "@/components/PaginationControls";
 import { InactiveClientsWhatsApp } from "@/components/InactiveClientsWhatsApp";
@@ -26,6 +25,7 @@ const PAGE_SIZE = 15;
 export default function Clientes() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [open, setOpen] = useState(searchParams.get("novo") === "1");
@@ -40,7 +40,6 @@ export default function Clientes() {
   const [endereco, setEndereco] = useState("");
   const [obs, setObs] = useState("");
   const [fotoUrl, setFotoUrl] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; nome: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const { data: customers = [], isLoading } = useQuery({
@@ -224,7 +223,7 @@ export default function Clientes() {
               ) : paginated.length === 0 ? (
                 <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Nenhum cliente encontrado</TableCell></TableRow>
               ) : paginated.map(c => (
-                <TableRow key={c.id} className="cursor-pointer hover:bg-primary/5 transition-colors group" onClick={() => setSelectedCustomer({ id: c.id, nome: c.nome })}>
+                <TableRow key={c.id} className="cursor-pointer hover:bg-primary/5 transition-colors group" onClick={() => navigate(`/clientes/${c.id}`)}>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       {c.foto_url ? (
@@ -267,7 +266,7 @@ export default function Clientes() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setSelectedCustomer({ id: c.id, nome: c.nome }); }}><Eye className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); navigate(`/clientes/${c.id}`); }}><Eye className="h-3.5 w-3.5" /></Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(c.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div>
                   </TableCell>
@@ -291,10 +290,6 @@ export default function Clientes() {
           </div>
         </DialogContent>
       </Dialog>
-
-      {selectedCustomer && (
-        <CustomerDetail customerId={selectedCustomer.id} customerName={selectedCustomer.nome} onClose={() => setSelectedCustomer(null)} />
-      )}
 
       {/* Inactive clients WhatsApp */}
       <InactiveClientsWhatsApp />
