@@ -1,0 +1,2 @@
+ALTER TABLE public.installments DROP CONSTRAINT IF EXISTS installments_status_check;
+ALTER TABLE public.installments ADD CONSTRAINT installments_status_check CHECK (status IN ('pendente','parcial','pago','cancelado'));
