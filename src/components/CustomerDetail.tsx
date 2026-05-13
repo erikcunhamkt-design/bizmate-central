@@ -251,25 +251,25 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     <Dialog open={!!customerId} onOpenChange={(v) => { if (!v) { setEditing(false); onClose(); } }}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <div className="flex items-center justify-between w-full">
-            <DialogTitle className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 w-full pr-8">
+            <DialogTitle className="flex items-center gap-3 min-w-0 flex-1">
               {customer?.foto_url ? (
-                <img src={customer.foto_url} alt={customerName} className="w-12 h-12 rounded-xl object-cover" />
+                <img src={customer.foto_url} alt={customerName} className="w-12 h-12 rounded-xl object-cover shrink-0" />
               ) : (
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                   <span className="text-xl font-bold text-primary">{customerName.charAt(0).toUpperCase()}</span>
                 </div>
               )}
-              <div>
-                <span>{customerName}</span>
+              <div className="min-w-0">
+                <span className="block truncate">{customerName}</span>
                 <div className={`flex items-center gap-1.5 mt-0.5 ${status.color}`}>
-                  <status.icon className="h-3 w-3" />
-                  <span className="text-xs font-medium">{status.label}</span>
+                  <status.icon className="h-3 w-3 shrink-0" />
+                  <span className="text-xs font-medium truncate">{status.label}</span>
                 </div>
               </div>
             </DialogTitle>
             {!editing && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
