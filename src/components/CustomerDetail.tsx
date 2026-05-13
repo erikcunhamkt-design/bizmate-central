@@ -18,7 +18,7 @@ import { buildAllocationPreview, getCustomerActivityStatus, getPaidValue, getRem
 import { useOperator } from "@/hooks/useOperator";
 import {
   ShoppingCart, CheckCircle, AlertTriangle, Package, MapPin, User,
-  Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX, CreditCard, FileDown
+  Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX, CreditCard, FileDown,
 } from "lucide-react";
 import { generateReceiptPDF } from "@/lib/receipt";
 
@@ -41,12 +41,10 @@ type PaymentAllocation = {
 };
 
 interface CustomerDetailProps {
-  customerId: string | null;
-  customerName: string;
-  onClose: () => void;
+  customerId: string;
 }
 
-export function CustomerDetail({ customerId, customerName, onClose }: CustomerDetailProps) {
+export function CustomerDetail({ customerId }: CustomerDetailProps) {
   const { toast } = useToast();
   const { operator } = useOperator();
   const queryClient = useQueryClient();
@@ -58,7 +56,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
   const { data: customer } = useQuery({
     queryKey: ["customer-detail", customerId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("customers").select("*").eq("id", customerId!).single();
+      const { data, error } = await supabase.from("customers").select("*").eq("id", customerId).single();
       if (error) throw error;
       return data;
     },
@@ -68,7 +66,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
   const { data: sales = [] } = useQuery({
     queryKey: ["customer-sales", customerId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sales").select("*, sale_items(*, products(nome))").eq("customer_id", customerId!).order("data_compra", { ascending: false });
+      const { data, error } = await supabase.from("sales").select("*, sale_items(*, products(nome))").eq("customer_id", customerId).order("data_compra", { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -78,7 +76,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
   const { data: installments = [] } = useQuery({
     queryKey: ["customer-installments", customerId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("installments").select("*").eq("customer_id", customerId!).order("vencimento_data");
+      const { data, error } = await supabase.from("installments").select("*").eq("customer_id", customerId).order("vencimento_data");
       if (error) throw error;
       return data;
     },
@@ -91,7 +89,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
       const { data: payments, error: paymentsError } = await (supabase as any)
         .from("customer_payments")
         .select("id, sale_id, valor_total, data_pagamento, metodo_recebimento, observacoes, operador")
-        .eq("customer_id", customerId!)
+        .eq("customer_id", customerId)
         .order("data_pagamento", { ascending: false });
       if (paymentsError) throw paymentsError;
 
@@ -119,7 +117,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
         endereco: editForm.endereco || null,
         observacoes: editForm.observacoes || null,
         foto_url: editForm.foto_url || null,
-      }).eq("id", customerId!);
+      }).eq("id", customerId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -135,7 +133,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     mutationFn: async () => {
       if (!customer) return;
       const newStatus = customer.status === "ativo" ? "inativo" : "ativo";
-      const { error } = await supabase.from("customers").update({ status: newStatus }).eq("id", customerId!);
+      const { error } = await supabase.from("customers").update({ status: newStatus }).eq("id", customerId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -215,8 +213,12 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     for (const item of (sale as any).sale_items ?? []) {
       const key = item.product_id;
       const existing = productMap.get(key);
-      if (existing) { existing.qtd += item.quantidade; existing.total += item.subtotal; }
-      else { productMap.set(key, { nome: (item as any).products?.nome ?? "Produto removido", qtd: item.quantidade, total: item.subtotal }); }
+      if (existing) {
+        existing.qtd += item.quantidade;
+        existing.total += item.subtotal;
+      } else {
+        productMap.set(key, { nome: (item as any).products?.nome ?? "Produto removido", qtd: item.quantidade, total: item.subtotal });
+      }
     }
   }
   const productsList = Array.from(productMap.values());
@@ -230,6 +232,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     const pending = Math.max(sale.total_venda - paid, 0);
     return { sale, paid, pending };
   });
+
   const receivingPreview = receivingInstallment ? buildAllocationPreview(installments as any, receivingInstallment.id, parseFloat(receiveForm.valor) || 0) : [];
   const paymentHistoryBySale = sales.map((sale) => {
     const salePayments = paymentHistory.payments.filter((payment) => payment.sale_id === sale.id);
@@ -245,31 +248,37 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
     if (isInactive) return { label: `Inativo há ${daysSinceLastPurchase} dias`, color: "text-warning", bg: "bg-warning/10", icon: Clock };
     return { label: "Ativo", color: "text-success", bg: "bg-success/10", icon: CheckCircle };
   };
+
   const status = getStatusLabel();
+  const customerName = customer?.nome ?? "Cliente";
 
   return (
-    <Dialog open={!!customerId} onOpenChange={(v) => { if (!v) { setEditing(false); onClose(); } }}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <div className="flex flex-wrap items-center justify-between gap-3 w-full pr-8">
-            <DialogTitle className="flex items-center gap-3 min-w-0 flex-1">
+    <div className="min-w-0 space-y-6">
+      <Card className="border-border/50">
+        <CardContent className="space-y-6 p-5 sm:p-6">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex min-w-0 flex-1 items-start gap-4">
               {customer?.foto_url ? (
-                <img src={customer.foto_url} alt={customerName} className="w-12 h-12 rounded-xl object-cover shrink-0" />
+                <img src={customer.foto_url} alt={customerName} className="h-16 w-16 rounded-xl object-cover shrink-0" />
               ) : (
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="text-xl font-bold text-primary">{customerName.charAt(0).toUpperCase()}</span>
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                  <span className="text-2xl font-bold text-primary">{customerName.charAt(0).toUpperCase()}</span>
                 </div>
               )}
-              <div className="min-w-0">
-                <span className="block truncate">{customerName}</span>
-                <div className={`flex items-center gap-1.5 mt-0.5 ${status.color}`}>
-                  <status.icon className="h-3 w-3 shrink-0" />
-                  <span className="text-xs font-medium truncate">{status.label}</span>
+
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="min-w-0">
+                  <h1 className="break-words text-2xl font-bold tracking-tight">{customerName}</h1>
+                  <div className={`mt-1 flex items-center gap-1.5 ${status.color}`}>
+                    <status.icon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="text-sm font-medium">{status.label}</span>
+                  </div>
                 </div>
               </div>
-            </DialogTitle>
+            </div>
+
             {!editing && (
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -286,358 +295,359 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
               </div>
             )}
           </div>
-        </DialogHeader>
 
-        {editing && (
-          <Card className="border-border/50">
-            <CardContent className="pt-4 space-y-3">
-              <CustomerPhotoUpload
-                currentUrl={editForm.foto_url || null}
-                onUpload={(url) => setEditForm(f => ({ ...f, foto_url: url }))}
-                onRemove={() => setEditForm(f => ({ ...f, foto_url: "" }))}
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><Label className="text-xs">Nome *</Label><Input value={editForm.nome} onChange={e => setEditForm(f => ({ ...f, nome: e.target.value }))} className="h-9" /></div>
-                <div className="space-y-1"><Label className="text-xs">CPF</Label><Input value={editForm.cpf} onChange={e => setEditForm(f => ({ ...f, cpf: e.target.value }))} placeholder="000.000.000-00" className="h-9" /></div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><Label className="text-xs">WhatsApp</Label><Input value={editForm.whatsapp} onChange={e => setEditForm(f => ({ ...f, whatsapp: e.target.value }))} className="h-9" /></div>
-                <div className="space-y-1"><Label className="text-xs">Email</Label><Input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} className="h-9" /></div>
-              </div>
-              <div className="space-y-1"><Label className="text-xs">Endereço</Label><Input value={editForm.endereco} onChange={e => setEditForm(f => ({ ...f, endereco: e.target.value }))} placeholder="Rua, nº, bairro, cidade" className="h-9" /></div>
-              <div className="space-y-1"><Label className="text-xs">Observações</Label><Textarea value={editForm.observacoes} onChange={e => setEditForm(f => ({ ...f, observacoes: e.target.value }))} className="resize-none" rows={2} /></div>
-              <div className="flex gap-2 justify-end">
-                <Button variant="outline" size="sm" onClick={() => setEditing(false)}><X className="h-3.5 w-3.5 mr-1" />Cancelar</Button>
-                <Button size="sm" className="gradient-primary" disabled={!editForm.nome || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
-                  <Save className="h-3.5 w-3.5 mr-1" />{updateMutation.isPending ? "Salvando..." : "Salvar"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {!editing && customer && (
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            {(customer as any).cpf && (
-              <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
-                <User className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-muted-foreground text-xs">CPF:</span>
-                <span className="font-medium text-xs">{(customer as any).cpf}</span>
-              </div>
-            )}
-            {(customer as any).endereco && (
-              <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2 col-span-2">
-                <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span className="text-xs">{(customer as any).endereco}</span>
-              </div>
-            )}
-            {lastPurchaseDate && (
-              <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
-                <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-muted-foreground text-xs">Última compra:</span>
-                <span className={`font-medium text-xs ${isInactive ? "text-warning" : ""}`}>
-                  {format(lastPurchaseDate, "dd/MM/yyyy")}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: "Total Comprado", value: totalComprado, icon: ShoppingCart, color: "text-primary", bg: "bg-primary/10" },
-            { label: "Total Pago", value: totalPagoGeral, icon: CheckCircle, color: "text-success", bg: "bg-success/10" },
-            { label: "Devendo", value: totalDevendo, icon: AlertTriangle, color: totalDevendo > 0 ? "text-destructive" : "text-muted-foreground", bg: totalDevendo > 0 ? "bg-destructive/10" : "bg-muted" },
-          ].map(k => (
-            <Card key={k.label} className="border-border/50">
-              <CardContent className="pt-4 pb-3 px-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className={`w-7 h-7 rounded-lg ${k.bg} flex items-center justify-center`}>
-                    <k.icon className={`h-3.5 w-3.5 ${k.color}`} />
-                  </div>
-                  <span className="text-[11px] text-muted-foreground font-medium">{k.label}</span>
+          {editing && (
+            <Card className="border-border/50">
+              <CardContent className="space-y-3 pt-4">
+                <CustomerPhotoUpload
+                  currentUrl={editForm.foto_url || null}
+                  onUpload={(url) => setEditForm(f => ({ ...f, foto_url: url }))}
+                  onRemove={() => setEditForm(f => ({ ...f, foto_url: "" }))}
+                />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1"><Label className="text-xs">Nome *</Label><Input value={editForm.nome} onChange={e => setEditForm(f => ({ ...f, nome: e.target.value }))} className="h-9" /></div>
+                  <div className="space-y-1"><Label className="text-xs">CPF</Label><Input value={editForm.cpf} onChange={e => setEditForm(f => ({ ...f, cpf: e.target.value }))} placeholder="000.000.000-00" className="h-9" /></div>
                 </div>
-                <p className={`text-lg font-bold ${k.color}`}>{formatBRL(k.value)}</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1"><Label className="text-xs">WhatsApp</Label><Input value={editForm.whatsapp} onChange={e => setEditForm(f => ({ ...f, whatsapp: e.target.value }))} className="h-9" /></div>
+                  <div className="space-y-1"><Label className="text-xs">Email</Label><Input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} className="h-9" /></div>
+                </div>
+                <div className="space-y-1"><Label className="text-xs">Endereço</Label><Input value={editForm.endereco} onChange={e => setEditForm(f => ({ ...f, endereco: e.target.value }))} placeholder="Rua, nº, bairro, cidade" className="h-9" /></div>
+                <div className="space-y-1"><Label className="text-xs">Observações</Label><Textarea value={editForm.observacoes} onChange={e => setEditForm(f => ({ ...f, observacoes: e.target.value }))} className="resize-none" rows={2} /></div>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditing(false)}><X className="mr-1 h-3.5 w-3.5" />Cancelar</Button>
+                  <Button size="sm" className="gradient-primary" disabled={!editForm.nome || updateMutation.isPending} onClick={() => updateMutation.mutate()}>
+                    <Save className="mr-1 h-3.5 w-3.5" />{updateMutation.isPending ? "Salvando..." : "Salvar"}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
+          )}
 
-        {isOverdue && (
-          <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
-            <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-destructive">{overdue.length} parcela(s) em atraso</p>
-              <p className="text-xs text-destructive/70">Total atrasado: {formatBRL(overdue.reduce((s, i) => s + i.valor_parcela, 0))}</p>
-            </div>
-          </div>
-        )}
-
-        {isInactive && !isOverdue && (
-          <div className="flex items-center gap-3 bg-warning/10 border border-warning/20 rounded-xl px-4 py-3">
-            <Clock className="h-5 w-5 text-warning shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-warning">Cliente inativo</p>
-              <p className="text-xs text-warning/70">Última compra há {daysSinceLastPurchase} dias</p>
-            </div>
-          </div>
-        )}
-
-        {productsList.length > 0 && (
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
-              <Package className="h-3.5 w-3.5" /> Produtos Comprados
-            </h3>
-            <div className="border border-border/50 rounded-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader><TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs font-semibold">Produto</TableHead>
-                    <TableHead className="text-right text-xs font-semibold">Qtd</TableHead>
-                    <TableHead className="text-right text-xs font-semibold">Total</TableHead>
-                  </TableRow></TableHeader>
-                  <TableBody>
-                    {productsList.map((p, idx) => (
-                      <TableRow key={idx} className="hover:bg-primary/5">
-                        <TableCell className="text-sm font-medium">{p.nome}</TableCell>
-                        <TableCell className="text-right text-sm">{p.qtd}</TableCell>
-                        <TableCell className="text-right text-sm font-semibold">{formatBRL(p.total)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
-            <ShoppingCart className="h-3.5 w-3.5" /> Histórico de Vendas
-          </h3>
-          {sales.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhuma venda registrada</p>
-          ) : (
-            <div className="border border-border/50 rounded-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader><TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs font-semibold">Data</TableHead>
-                    <TableHead className="text-xs font-semibold">Total</TableHead>
-                    <TableHead className="text-xs font-semibold">Pagamento</TableHead>
-                    <TableHead className="text-xs font-semibold">Status</TableHead>
-                  </TableRow></TableHeader>
-                  <TableBody>
-                    {sales.map(s => (
-                      <TableRow key={s.id} className="hover:bg-primary/5">
-                        <TableCell className="text-sm">{format(new Date(s.data_compra), "dd/MM/yyyy")}</TableCell>
-                        <TableCell className="text-sm font-semibold">{formatBRL(s.total_venda)}</TableCell>
-                        <TableCell><span className="capitalize text-xs bg-muted px-2 py-0.5 rounded-md">{s.forma_pagamento}</span></TableCell>
-                        <TableCell><StatusBadge status={s.status} /></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+          {!editing && customer && (
+            <div className="grid gap-2 text-sm sm:grid-cols-2">
+              {(customer as any).cpf && (
+                <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 min-w-0">
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">CPF:</span>
+                  <span className="truncate text-xs font-medium">{(customer as any).cpf}</span>
+                </div>
+              )}
+              {(customer as any).endereco && (
+                <div className="col-span-full flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 min-w-0">
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="text-xs break-words">{(customer as any).endereco}</span>
+                </div>
+              )}
+              {lastPurchaseDate && (
+                <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 min-w-0">
+                  <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Última compra:</span>
+                  <span className={`text-xs font-medium ${isInactive ? "text-warning" : ""}`}>
+                    {format(lastPurchaseDate, "dd/MM/yyyy")}
+                  </span>
+                </div>
+              )}
             </div>
           )}
-        </div>
+        </CardContent>
+      </Card>
 
-        {salePaymentRows.length > 0 && (
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
-              <CreditCard className="h-3.5 w-3.5" /> Venda x Pagamento
-            </h3>
-            <div className="border border-border/50 rounded-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader><TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs font-semibold">Venda</TableHead>
-                    <TableHead className="text-xs font-semibold">Total</TableHead>
-                    <TableHead className="text-xs font-semibold">Pago</TableHead>
-                    <TableHead className="text-xs font-semibold">Falta</TableHead>
-                  </TableRow></TableHeader>
-                  <TableBody>
-                    {salePaymentRows.map(({ sale, paid, pending }) => (
-                      <TableRow key={sale.id} className="hover:bg-primary/5">
-                        <TableCell className="text-sm">{format(new Date(sale.data_compra), "dd/MM/yyyy")}</TableCell>
-                        <TableCell className="text-sm font-semibold">{formatBRL(sale.total_venda)}</TableCell>
-                        <TableCell className="text-sm font-semibold text-success">{formatBRL(paid)}</TableCell>
-                        <TableCell className={`text-sm font-semibold ${pending > 0 ? "text-destructive" : "text-muted-foreground"}`}>{formatBRL(pending)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {[
+          { label: "Total Comprado", value: totalComprado, icon: ShoppingCart, color: "text-primary", bg: "bg-primary/10" },
+          { label: "Total Pago", value: totalPagoGeral, icon: CheckCircle, color: "text-success", bg: "bg-success/10" },
+          { label: "Devendo", value: totalDevendo, icon: AlertTriangle, color: totalDevendo > 0 ? "text-destructive" : "text-muted-foreground", bg: totalDevendo > 0 ? "bg-destructive/10" : "bg-muted" },
+        ].map(k => (
+          <Card key={k.label} className="border-border/50">
+            <CardContent className="px-4 pb-3 pt-4">
+              <div className="mb-2 flex items-center gap-2">
+                <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${k.bg}`}>
+                  <k.icon className={`h-3.5 w-3.5 ${k.color}`} />
+                </div>
+                <span className="text-[11px] font-medium text-muted-foreground">{k.label}</span>
               </div>
+              <p className={`text-lg font-bold ${k.color}`}>{formatBRL(k.value)}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {isOverdue && (
+        <div className="flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
+          <div>
+            <p className="text-sm font-semibold text-destructive">{overdue.length} parcela(s) em atraso</p>
+            <p className="text-xs text-destructive/70">Total atrasado: {formatBRL(overdue.reduce((s, i) => s + i.valor_parcela, 0))}</p>
+          </div>
+        </div>
+      )}
+
+      {isInactive && !isOverdue && (
+        <div className="flex items-center gap-3 rounded-xl border border-warning/20 bg-warning/10 px-4 py-3">
+          <Clock className="h-5 w-5 shrink-0 text-warning" />
+          <div>
+            <p className="text-sm font-semibold text-warning">Cliente inativo</p>
+            <p className="text-xs text-warning/70">Última compra há {daysSinceLastPurchase} dias</p>
+          </div>
+        </div>
+      )}
+
+      {productsList.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <Package className="h-3.5 w-3.5" /> Produtos Comprados
+          </h2>
+          <div className="overflow-hidden rounded-xl border border-border/50">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs font-semibold">Produto</TableHead>
+                  <TableHead className="text-right text-xs font-semibold">Qtd</TableHead>
+                  <TableHead className="text-right text-xs font-semibold">Total</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {productsList.map((p, idx) => (
+                    <TableRow key={idx} className="hover:bg-primary/5">
+                      <TableCell className="text-sm font-medium">{p.nome}</TableCell>
+                      <TableCell className="text-right text-sm">{p.qtd}</TableCell>
+                      <TableCell className="text-right text-sm font-semibold">{formatBRL(p.total)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="space-y-2">
+        <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <ShoppingCart className="h-3.5 w-3.5" /> Histórico de Vendas
+        </h2>
+        {sales.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">Nenhuma venda registrada</p>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-border/50">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs font-semibold">Data</TableHead>
+                  <TableHead className="text-xs font-semibold">Total</TableHead>
+                  <TableHead className="text-xs font-semibold">Pagamento</TableHead>
+                  <TableHead className="text-xs font-semibold">Status</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {sales.map(s => (
+                    <TableRow key={s.id} className="hover:bg-primary/5">
+                      <TableCell className="text-sm">{format(new Date(s.data_compra), "dd/MM/yyyy")}</TableCell>
+                      <TableCell className="text-sm font-semibold">{formatBRL(s.total_venda)}</TableCell>
+                      <TableCell><span className="rounded-md bg-muted px-2 py-0.5 text-xs capitalize">{s.forma_pagamento}</span></TableCell>
+                      <TableCell><StatusBadge status={s.status} /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           </div>
         )}
+      </section>
 
-        {paymentHistoryBySale.length > 0 && (
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
-              <CreditCard className="h-3.5 w-3.5" /> Histórico de pagamentos/abatimentos
-            </h3>
-            <div className="space-y-3">
-              {paymentHistoryBySale.map(({ sale, payments, allocations, totalReceived }) => (
-                <div key={sale.id} className="border border-border/50 rounded-xl overflow-hidden">
-                  <div className="flex flex-wrap items-center justify-between gap-2 bg-muted/30 px-3 py-2 border-b border-border/50">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate">Venda de {format(new Date(sale.data_compra), "dd/MM/yyyy")}</p>
-                      <p className="text-xs text-muted-foreground truncate">Total da venda: {formatBRL(sale.total_venda)}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-xs text-muted-foreground">Recebido</p>
-                      <p className="text-sm font-bold text-success">{formatBRL(totalReceived)}</p>
-                    </div>
+      {salePaymentRows.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <CreditCard className="h-3.5 w-3.5" /> Venda x Pagamento
+          </h2>
+          <div className="overflow-hidden rounded-xl border border-border/50">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs font-semibold">Venda</TableHead>
+                  <TableHead className="text-xs font-semibold">Total</TableHead>
+                  <TableHead className="text-xs font-semibold">Pago</TableHead>
+                  <TableHead className="text-xs font-semibold">Falta</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {salePaymentRows.map(({ sale, paid, pending }) => (
+                    <TableRow key={sale.id} className="hover:bg-primary/5">
+                      <TableCell className="text-sm">{format(new Date(sale.data_compra), "dd/MM/yyyy")}</TableCell>
+                      <TableCell className="text-sm font-semibold">{formatBRL(sale.total_venda)}</TableCell>
+                      <TableCell className="text-sm font-semibold text-success">{formatBRL(paid)}</TableCell>
+                      <TableCell className={`text-sm font-semibold ${pending > 0 ? "text-destructive" : "text-muted-foreground"}`}>{formatBRL(pending)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {paymentHistoryBySale.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <CreditCard className="h-3.5 w-3.5" /> Histórico de pagamentos/abatimentos
+          </h2>
+          <div className="space-y-3">
+            {paymentHistoryBySale.map(({ sale, payments, allocations, totalReceived }) => (
+              <div key={sale.id} className="overflow-hidden rounded-xl border border-border/50">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 bg-muted/30 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">Venda de {format(new Date(sale.data_compra), "dd/MM/yyyy")}</p>
+                    <p className="truncate text-xs text-muted-foreground">Total da venda: {formatBRL(sale.total_venda)}</p>
                   </div>
-                  <div className="divide-y divide-border/50">
-                    {payments.map((payment) => {
-                      const paymentAllocations = allocations.filter((allocation) => allocation.payment_id === payment.id);
-                      const handleDownload = () => {
-                        generateReceiptPDF({
-                          cliente: customerName,
-                          clienteCpf: (customer as any)?.cpf ?? null,
-                          valorTotal: Number(payment.valor_total),
-                          data: payment.data_pagamento,
-                          metodo: payment.metodo_recebimento,
-                          operador: payment.operador,
-                          observacoes: payment.observacoes,
-                          vendaData: sale.data_compra,
-                          vendaTotal: Number(sale.total_venda),
-                          numeroRecibo: payment.id.slice(0, 8).toUpperCase(),
-                          alocacoes: paymentAllocations.map((a) => {
-                            const inst = installments.find((i) => i.id === a.installment_id);
-                            return {
-                              numero_parcela: inst?.numero_parcela ?? 0,
-                              total_parcelas: inst?.total_parcelas ?? 0,
-                              valor_aplicado: Number(a.valor_aplicado),
-                              tipo: a.tipo,
-                            };
-                          }),
-                        });
-                      };
-                      return (
-                        <div key={payment.id} className="p-3 space-y-2">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-success">{formatBRL(payment.valor_total)}</p>
-                              <p className="text-xs text-muted-foreground capitalize break-words">
-                                {format(new Date(payment.data_pagamento), "dd/MM/yyyy")} • {payment.metodo_recebimento} • {payment.operador ?? "Sem operador"}
-                              </p>
-                              {payment.observacoes && <p className="text-xs text-muted-foreground mt-1 break-words">{payment.observacoes}</p>}
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={handleDownload}>
-                                <FileDown className="h-3 w-3" />Recibo
-                              </Button>
-                              <span className="text-[11px] bg-success/10 text-success border border-success/20 rounded-md px-2 py-0.5 font-semibold">Recebimento</span>
-                            </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs text-muted-foreground">Recebido</p>
+                    <p className="text-sm font-bold text-success">{formatBRL(totalReceived)}</p>
+                  </div>
+                </div>
+                <div className="divide-y divide-border/50">
+                  {payments.map((payment) => {
+                    const paymentAllocations = allocations.filter((allocation) => allocation.payment_id === payment.id);
+                    const handleDownload = () => {
+                      generateReceiptPDF({
+                        cliente: customerName,
+                        clienteCpf: (customer as any)?.cpf ?? null,
+                        valorTotal: Number(payment.valor_total),
+                        data: payment.data_pagamento,
+                        metodo: payment.metodo_recebimento,
+                        operador: payment.operador,
+                        observacoes: payment.observacoes,
+                        vendaData: sale.data_compra,
+                        vendaTotal: Number(sale.total_venda),
+                        numeroRecibo: payment.id.slice(0, 8).toUpperCase(),
+                        alocacoes: paymentAllocations.map((a) => {
+                          const inst = installments.find((i) => i.id === a.installment_id);
+                          return {
+                            numero_parcela: inst?.numero_parcela ?? 0,
+                            total_parcelas: inst?.total_parcelas ?? 0,
+                            valor_aplicado: Number(a.valor_aplicado),
+                            tipo: a.tipo,
+                          };
+                        }),
+                      });
+                    };
+
+                    return (
+                      <div key={payment.id} className="space-y-2 p-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-success">{formatBRL(payment.valor_total)}</p>
+                            <p className="break-words text-xs capitalize text-muted-foreground">
+                              {format(new Date(payment.data_pagamento), "dd/MM/yyyy")} • {payment.metodo_recebimento} • {payment.operador ?? "Sem operador"}
+                            </p>
+                            {payment.observacoes && <p className="mt-1 break-words text-xs text-muted-foreground">{payment.observacoes}</p>}
                           </div>
-                          <div className="rounded-lg bg-muted/30 border border-border/40 overflow-hidden">
-                            {paymentAllocations.map((allocation) => {
-                              const installment = installments.find((item) => item.id === allocation.installment_id);
-                              return (
-                                <div key={allocation.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs border-b last:border-b-0 border-border/40">
-                                  <span className="text-muted-foreground">
-                                    {allocation.tipo === "abatimento" ? "Abatimento" : "Parcela"} {installment ? `${installment.numero_parcela}/${installment.total_parcelas}` : "removida"}
-                                    <span className="block text-[10px] capitalize">{format(new Date(payment.data_pagamento), "dd/MM/yyyy")} • {payment.metodo_recebimento} • {payment.operador ?? "Sem operador"}</span>
-                                  </span>
-                                  <span className="font-semibold">{formatBRL(allocation.valor_aplicado)}</span>
-                                </div>
-                              );
-                            })}
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={handleDownload}>
+                              <FileDown className="h-3 w-3" />Recibo
+                            </Button>
+                            <span className="rounded-md border border-success/20 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">Recebimento</span>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                        <div className="overflow-hidden rounded-lg border border-border/40 bg-muted/30">
+                          {paymentAllocations.map((allocation) => {
+                            const installment = installments.find((item) => item.id === allocation.installment_id);
+                            return (
+                              <div key={allocation.id} className="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2 text-xs last:border-b-0">
+                                <span className="text-muted-foreground">
+                                  {allocation.tipo === "abatimento" ? "Abatimento" : "Parcela"} {installment ? `${installment.numero_parcela}/${installment.total_parcelas}` : "removida"}
+                                  <span className="block text-[10px] capitalize">{format(new Date(payment.data_pagamento), "dd/MM/yyyy")} • {payment.metodo_recebimento} • {payment.operador ?? "Sem operador"}</span>
+                                </span>
+                                <span className="font-semibold">{formatBRL(allocation.valor_aplicado)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {installments.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Parcelas</h2>
+          <div className="overflow-hidden rounded-xl border border-border/50">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs font-semibold">Vencimento</TableHead>
+                  <TableHead className="text-xs font-semibold">Parcela</TableHead>
+                  <TableHead className="text-xs font-semibold">Valor</TableHead>
+                  <TableHead className="text-xs font-semibold">Recebido</TableHead>
+                  <TableHead className="text-xs font-semibold">Falta</TableHead>
+                  <TableHead className="text-xs font-semibold">Status</TableHead>
+                  <TableHead></TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {installments.map(i => (
+                    <TableRow key={i.id} className={`hover:bg-primary/5 ${i.status === "pendente" && new Date(i.vencimento_data) < today ? "bg-destructive/5" : ""}`}>
+                      <TableCell className="text-sm">{format(new Date(i.vencimento_data), "dd/MM/yyyy")}</TableCell>
+                      <TableCell><span className="rounded-md bg-muted px-2 py-0.5 text-xs">{i.numero_parcela}/{i.total_parcelas}</span></TableCell>
+                      <TableCell className="text-sm font-semibold">{formatBRL(i.valor_parcela)}</TableCell>
+                      <TableCell className="text-sm font-semibold text-success">{formatBRL(getPaidValue(i))}</TableCell>
+                      <TableCell className={`text-sm font-semibold ${getRemainingValue(i) > 0 ? "text-warning" : "text-muted-foreground"}`}>{formatBRL(getRemainingValue(i))}</TableCell>
+                      <TableCell><StatusBadge status={i.status} vencimento={i.vencimento_data} /></TableCell>
+                      <TableCell>
+                        {i.status !== "pago" && getRemainingValue(i) > 0 && (
+                          <Button size="sm" variant="ghost" className="h-8 gap-1 text-success hover:bg-success/10" onClick={() => {
+                            setReceivingInstallment(i);
+                            setReceiveForm({ valor: String(getRemainingValue(i)), data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
+                          }} disabled={receivePaymentMutation.isPending}>
+                            <CheckCircle className="h-3.5 w-3.5" />Receber
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           </div>
-        )}
+        </section>
+      )}
 
-        {installments.length > 0 && (
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Parcelas</h3>
-            <div className="border border-border/50 rounded-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader><TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs font-semibold">Vencimento</TableHead>
-                    <TableHead className="text-xs font-semibold">Parcela</TableHead>
-                    <TableHead className="text-xs font-semibold">Valor</TableHead>
-                    <TableHead className="text-xs font-semibold">Recebido</TableHead>
-                    <TableHead className="text-xs font-semibold">Falta</TableHead>
-                    <TableHead className="text-xs font-semibold">Status</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow></TableHeader>
-                  <TableBody>
-                    {installments.map(i => (
-                      <TableRow key={i.id} className={`hover:bg-primary/5 ${i.status === "pendente" && new Date(i.vencimento_data) < today ? "bg-destructive/5" : ""}`}>
-                        <TableCell className="text-sm">{format(new Date(i.vencimento_data), "dd/MM/yyyy")}</TableCell>
-                        <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-md">{i.numero_parcela}/{i.total_parcelas}</span></TableCell>
-                        <TableCell className="text-sm font-semibold">{formatBRL(i.valor_parcela)}</TableCell>
-                        <TableCell className="text-sm font-semibold text-success">{formatBRL(getPaidValue(i))}</TableCell>
-                        <TableCell className={`text-sm font-semibold ${getRemainingValue(i) > 0 ? "text-warning" : "text-muted-foreground"}`}>{formatBRL(getRemainingValue(i))}</TableCell>
-                        <TableCell><StatusBadge status={i.status} vencimento={i.vencimento_data} /></TableCell>
-                        <TableCell>
-                          {i.status !== "pago" && getRemainingValue(i) > 0 && (
-                            <Button size="sm" variant="ghost" className="h-8 gap-1 text-success hover:bg-success/10" onClick={() => {
-                              setReceivingInstallment(i);
-                              setReceiveForm({ valor: String(getRemainingValue(i)), data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
-                            }} disabled={receivePaymentMutation.isPending}>
-                              <CheckCircle className="h-3.5 w-3.5" />Receber
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+      <Dialog open={!!receivingInstallment} onOpenChange={(open) => { if (!open) setReceivingInstallment(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10">
+                <CreditCard className="h-4 w-4 text-success" />
               </div>
+              Receber pagamento
+            </DialogTitle>
+          </DialogHeader>
+          {receivingInstallment && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-2 rounded-xl border border-border/50 bg-muted/30 p-3 text-sm sm:grid-cols-3">
+                <div><p className="text-xs text-muted-foreground">Parcela</p><p className="font-semibold">{receivingInstallment.numero_parcela}/{receivingInstallment.total_parcelas}</p></div>
+                <div><p className="text-xs text-muted-foreground">Recebido</p><p className="font-semibold text-success">{formatBRL(getPaidValue(receivingInstallment))}</p></div>
+                <div><p className="text-xs text-muted-foreground">Falta</p><p className="font-semibold text-warning">{formatBRL(getRemainingValue(receivingInstallment))}</p></div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5"><Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Valor recebido</Label><Input type="number" min={0.01} step="0.01" value={receiveForm.valor} onChange={e => setReceiveForm(f => ({ ...f, valor: e.target.value }))} /></div>
+                <div className="space-y-1.5"><Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data</Label><Input type="date" value={receiveForm.data} onChange={e => setReceiveForm(f => ({ ...f, data: e.target.value }))} /></div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Forma de recebimento</Label>
+                <Select value={receiveForm.metodo} onValueChange={metodo => setReceiveForm(f => ({ ...f, metodo }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="pix">PIX</SelectItem><SelectItem value="dinheiro">Dinheiro</SelectItem><SelectItem value="cartao">Cartão</SelectItem><SelectItem value="outro">Outro</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <div className="rounded-xl border border-border/50 bg-muted/30 p-3"><p className="text-xs text-muted-foreground">Operador</p><p className="text-sm font-semibold">{operator}</p></div>
+              <div className="space-y-1.5"><Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Observação</Label><Textarea value={receiveForm.observacoes} onChange={e => setReceiveForm(f => ({ ...f, observacoes: e.target.value }))} className="resize-none" rows={2} /></div>
+              {receivingPreview.length > 0 && <div className="overflow-hidden rounded-xl border border-border/50"><div className="bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Aplicação automática</div>{receivingPreview.map(item => <div key={item.installment.id} className="flex items-center justify-between border-t border-border/50 px-3 py-2 text-sm"><span>Parcela {item.installment.numero_parcela}/{item.installment.total_parcelas}</span><span className="font-semibold text-success">{formatBRL(item.amount)} — {item.statusAfter === "pago" ? "paga" : "parcial"}</span></div>)}</div>}
+              <Button className="w-full gradient-primary shadow-glow" onClick={() => receivePaymentMutation.mutate()} disabled={receivePaymentMutation.isPending || receivingPreview.length === 0}>{receivePaymentMutation.isPending ? "Registrando..." : "Registrar recebimento"}</Button>
             </div>
-          </div>
-        )}
-
-        <Dialog open={!!receivingInstallment} onOpenChange={(open) => { if (!open) setReceivingInstallment(null); }}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
-                  <CreditCard className="h-4 w-4 text-success" />
-                </div>
-                Receber pagamento
-              </DialogTitle>
-            </DialogHeader>
-            {receivingInstallment && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-2 rounded-xl border border-border/50 bg-muted/30 p-3 text-sm">
-                  <div><p className="text-xs text-muted-foreground">Parcela</p><p className="font-semibold">{receivingInstallment.numero_parcela}/{receivingInstallment.total_parcelas}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Recebido</p><p className="font-semibold text-success">{formatBRL(getPaidValue(receivingInstallment))}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Falta</p><p className="font-semibold text-warning">{formatBRL(getRemainingValue(receivingInstallment))}</p></div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Valor recebido</Label><Input type="number" min={0.01} step="0.01" value={receiveForm.valor} onChange={e => setReceiveForm(f => ({ ...f, valor: e.target.value }))} /></div>
-                  <div className="space-y-1.5"><Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data</Label><Input type="date" value={receiveForm.data} onChange={e => setReceiveForm(f => ({ ...f, data: e.target.value }))} /></div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Forma de recebimento</Label>
-                  <Select value={receiveForm.metodo} onValueChange={metodo => setReceiveForm(f => ({ ...f, metodo }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="pix">PIX</SelectItem><SelectItem value="dinheiro">Dinheiro</SelectItem><SelectItem value="cartao">Cartão</SelectItem><SelectItem value="outro">Outro</SelectItem></SelectContent>
-                  </Select>
-                </div>
-                <div className="rounded-xl border border-border/50 bg-muted/30 p-3"><p className="text-xs text-muted-foreground">Operador</p><p className="text-sm font-semibold">{operator}</p></div>
-                <div className="space-y-1.5"><Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Observação</Label><Textarea value={receiveForm.observacoes} onChange={e => setReceiveForm(f => ({ ...f, observacoes: e.target.value }))} className="resize-none" rows={2} /></div>
-                {receivingPreview.length > 0 && <div className="rounded-xl border border-border/50 overflow-hidden"><div className="px-3 py-2 bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Aplicação automática</div>{receivingPreview.map(item => <div key={item.installment.id} className="flex items-center justify-between px-3 py-2 border-t border-border/50 text-sm"><span>Parcela {item.installment.numero_parcela}/{item.installment.total_parcelas}</span><span className="font-semibold text-success">{formatBRL(item.amount)} — {item.statusAfter === "pago" ? "paga" : "parcial"}</span></div>)}</div>}
-                <Button className="w-full gradient-primary shadow-glow" onClick={() => receivePaymentMutation.mutate()} disabled={receivePaymentMutation.isPending || receivingPreview.length === 0}>{receivePaymentMutation.isPending ? "Registrando..." : "Registrar recebimento"}</Button>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
-      </DialogContent>
-    </Dialog>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
