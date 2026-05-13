@@ -151,52 +151,18 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
       if (!receivingInstallment) throw new Error("Parcela não encontrada");
       const valorRecebido = parseFloat(receiveForm.valor);
       if (!valorRecebido || valorRecebido <= 0) throw new Error("Informe o valor recebido");
-      const preview = buildAllocationPreview(installments as any, receivingInstallment.id, valorRecebido);
-      const totalAplicado = preview.reduce((sum, item) => sum + item.amount, 0);
-      if (Math.abs(totalAplicado - valorRecebido) > 0.009) throw new Error("O valor recebido é maior que o saldo em aberto desta venda");
 
-      const { data: payment, error: paymentError } = await (supabase as any).from("customer_payments").insert({
-        user_id: receivingInstallment.user_id,
-        customer_id: receivingInstallment.customer_id,
-        sale_id: receivingInstallment.sale_id,
-        valor_total: valorRecebido,
-        data_pagamento: receiveForm.data,
-        metodo_recebimento: receiveForm.metodo,
-        observacoes: receiveForm.observacoes || null,
-        operador: operator,
-      }).select().single();
-      if (paymentError) throw paymentError;
-
-      const { error: allocationsError } = await (supabase as any).from("payment_allocations").insert(preview.map(item => ({
-        user_id: receivingInstallment.user_id,
-        payment_id: payment.id,
-        installment_id: item.installment.id,
-        valor_aplicado: item.amount,
-        tipo: item.installment.id === receivingInstallment.id ? "parcela" : "abatimento",
-      })));
-      if (allocationsError) throw allocationsError;
-
-      for (const item of preview) {
-        const novoPago = Math.round((getPaidValue(item.installment) + item.amount) * 100) / 100;
-        const { error } = await supabase.from("installments").update({
-          status: item.statusAfter,
-          pago_valor: novoPago,
-          pago_em: item.statusAfter === "pago" ? receiveForm.data : null,
-          metodo_recebimento: receiveForm.metodo,
-        }).eq("id", item.installment.id);
-        if (error) throw error;
-      }
-
-      const { error: cashError } = await supabase.from("cash_movements").insert({
-        user_id: receivingInstallment.user_id,
-        tipo: "entrada",
-        valor: valorRecebido,
-        origem: "recebimento",
-        ref_id: payment.id,
-        descricao: `Recebimento parcelado — ${customerName}`,
-        data: receiveForm.data,
+      const { error } = await (supabase as any).rpc("register_customer_payment", {
+        p_customer_id: receivingInstallment.customer_id,
+        p_sale_id: receivingInstallment.sale_id,
+        p_selected_installment_id: receivingInstallment.id,
+        p_valor: valorRecebido,
+        p_data: receiveForm.data,
+        p_metodo: receiveForm.metodo,
+        p_observacoes: receiveForm.observacoes || "",
+        p_operador: operator || "",
       });
-      if (cashError) throw cashError;
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customer-installments", customerId] });
@@ -283,7 +249,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
 
   return (
     <Dialog open={!!customerId} onOpenChange={(v) => { if (!v) { setEditing(false); onClose(); } }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <div className="flex items-center justify-between w-full">
             <DialogTitle className="flex items-center gap-3">
@@ -509,12 +475,12 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
             <div className="space-y-3">
               {paymentHistoryBySale.map(({ sale, payments, allocations, totalReceived }) => (
                 <div key={sale.id} className="border border-border/50 rounded-xl overflow-hidden">
-                  <div className="flex items-center justify-between gap-3 bg-muted/30 px-3 py-2 border-b border-border/50">
-                    <div>
-                      <p className="text-sm font-semibold">Venda de {format(new Date(sale.data_compra), "dd/MM/yyyy")}</p>
-                      <p className="text-xs text-muted-foreground">Total da venda: {formatBRL(sale.total_venda)}</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2 bg-muted/30 px-3 py-2 border-b border-border/50">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">Venda de {format(new Date(sale.data_compra), "dd/MM/yyyy")}</p>
+                      <p className="text-xs text-muted-foreground truncate">Total da venda: {formatBRL(sale.total_venda)}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <p className="text-xs text-muted-foreground">Recebido</p>
                       <p className="text-sm font-bold text-success">{formatBRL(totalReceived)}</p>
                     </div>
@@ -547,15 +513,15 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                       };
                       return (
                         <div key={payment.id} className="p-3 space-y-2">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0">
                               <p className="text-sm font-semibold text-success">{formatBRL(payment.valor_total)}</p>
-                              <p className="text-xs text-muted-foreground capitalize">
+                              <p className="text-xs text-muted-foreground capitalize break-words">
                                 {format(new Date(payment.data_pagamento), "dd/MM/yyyy")} • {payment.metodo_recebimento} • {payment.operador ?? "Sem operador"}
                               </p>
-                              {payment.observacoes && <p className="text-xs text-muted-foreground mt-1">{payment.observacoes}</p>}
+                              {payment.observacoes && <p className="text-xs text-muted-foreground mt-1 break-words">{payment.observacoes}</p>}
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                               <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={handleDownload}>
                                 <FileDown className="h-3 w-3" />Recibo
                               </Button>
