@@ -700,7 +700,7 @@ export default function Vendas() {
 
       {/* Nova Venda Dialog */}
       <Dialog open={openNova} onOpenChange={(v) => { if (!v) resetForm(); else setOpenNova(true); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
@@ -821,7 +821,7 @@ export default function Vendas() {
       </Dialog>
 
       <Dialog open={!!receivingInstallment} onOpenChange={(open) => { if (!open) setReceivingInstallment(null); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
