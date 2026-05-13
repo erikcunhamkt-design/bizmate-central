@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
 import { endOfMonth, format, startOfMonth } from "date-fns";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { CalendarDays, CheckCircle, DollarSign, Plus, Trash2, Pencil, ShoppingCart, CreditCard, Search, X, Undo2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,7 +21,6 @@ import { motion } from "framer-motion";
 import { PaginationControls } from "@/components/PaginationControls";
 import { buildAllocationPreview, getPaidValue, getRemainingValue } from "@/lib/receivables";
 import { useOperator } from "@/hooks/useOperator";
-import { useNavigate } from "react-router-dom";
 
 const PAGE_SIZE = 15;
 
