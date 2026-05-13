@@ -590,6 +590,10 @@ export type Database = {
         }
         Returns: string
       }
+      undo_installment_payment: {
+        Args: { p_installment_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
