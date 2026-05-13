@@ -21,7 +21,9 @@ const pageTitles: Record<string, string> = {
 
 export default function AppLayout() {
   const location = useLocation();
-  const currentTitle = pageTitles[location.pathname] ?? "";
+  const currentTitle = location.pathname.startsWith("/clientes/")
+    ? "Cliente"
+    : (pageTitles[location.pathname] ?? "");
   const [searchOpen, setSearchOpen] = useState(false);
   const { operator, setOperator } = useOperator();
 
