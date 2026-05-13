@@ -513,15 +513,15 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                       };
                       return (
                         <div key={payment.id} className="p-3 space-y-2">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0">
                               <p className="text-sm font-semibold text-success">{formatBRL(payment.valor_total)}</p>
-                              <p className="text-xs text-muted-foreground capitalize">
+                              <p className="text-xs text-muted-foreground capitalize break-words">
                                 {format(new Date(payment.data_pagamento), "dd/MM/yyyy")} • {payment.metodo_recebimento} • {payment.operador ?? "Sem operador"}
                               </p>
-                              {payment.observacoes && <p className="text-xs text-muted-foreground mt-1">{payment.observacoes}</p>}
+                              {payment.observacoes && <p className="text-xs text-muted-foreground mt-1 break-words">{payment.observacoes}</p>}
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                               <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={handleDownload}>
                                 <FileDown className="h-3 w-3" />Recibo
                               </Button>
