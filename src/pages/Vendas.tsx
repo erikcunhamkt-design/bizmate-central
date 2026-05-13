@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
 import { endOfMonth, format, startOfMonth } from "date-fns";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { CalendarDays, CheckCircle, DollarSign, Plus, Trash2, Pencil, ShoppingCart, CreditCard, Search, X, Undo2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -37,6 +37,7 @@ export default function Vendas() {
   const { user } = useAuth();
   const { operator } = useOperator();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get("tab") === "parcelas" ? "parcelas" : "vendas";
@@ -529,9 +530,9 @@ export default function Vendas() {
                   ) : filteredSales.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma venda encontrada</TableCell></TableRow>
                   ) : paginatedSales.map(s => (
-                    <TableRow key={s.id} className="hover:bg-primary/5 transition-colors">
+                    <TableRow key={s.id} className="cursor-pointer hover:bg-primary/5 transition-colors" onClick={() => navigate(`/clientes/${s.customer_id}`)}>
                       <TableCell className="text-sm">
-                        {editingSale?.id === s.id ? <Input type="date" value={editingSale.data_compra} onChange={e => setEditingSale({ ...editingSale, data_compra: e.target.value })} className="h-8 w-36" /> : format(new Date(s.data_compra), "dd/MM/yyyy")}
+                        {editingSale?.id === s.id ? <Input type="date" value={editingSale.data_compra} onClick={e => e.stopPropagation()} onChange={e => setEditingSale({ ...editingSale, data_compra: e.target.value })} className="h-8 w-36" /> : format(new Date(s.data_compra), "dd/MM/yyyy")}
                       </TableCell>
                       <TableCell className="font-semibold text-sm">
                         {editingSale?.id === s.id ? (
@@ -542,7 +543,7 @@ export default function Vendas() {
                         ) : (s as any).customers?.nome ?? "—"}
                       </TableCell>
                       <TableCell className="font-semibold text-sm">
-                        {editingSale?.id === s.id ? <Input type="number" min={0.01} step="0.01" value={editingSale.total} onChange={e => setEditingSale({ ...editingSale, total: e.target.value })} className="h-8 w-28" /> : formatBRL(s.total_venda)}
+                        {editingSale?.id === s.id ? <Input type="number" min={0.01} step="0.01" value={editingSale.total} onClick={e => e.stopPropagation()} onChange={e => setEditingSale({ ...editingSale, total: e.target.value })} className="h-8 w-28" /> : formatBRL(s.total_venda)}
                       </TableCell>
                       <TableCell>
                         {editingSale?.id === s.id ? (
@@ -562,19 +563,20 @@ export default function Vendas() {
                         <div className="flex gap-1">
                           {editingSale?.id === s.id ? (
                             <>
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-success hover:bg-success/10" onClick={() => updateSale.mutate({ id: s.id, customer_id: editingSale.customer_id, total: parseFloat(editingSale.total), forma_pagamento: editingSale.forma_pagamento, data_compra: editingSale.data_compra })} disabled={updateSale.isPending}>
+                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-success hover:bg-success/10" onClick={(e) => { e.stopPropagation(); updateSale.mutate({ id: s.id, customer_id: editingSale.customer_id, total: parseFloat(editingSale.total), forma_pagamento: editingSale.forma_pagamento, data_compra: editingSale.data_compra }); }} disabled={updateSale.isPending}>
                                 <CheckCircle className="h-3.5 w-3.5" />
                               </Button>
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setEditingSale(null)}>
+                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); setEditingSale(null); }}>
                                 <X className="h-3.5 w-3.5" />
                               </Button>
                             </>
                           ) : (
-                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-primary/10" onClick={() => setEditingSale({ id: s.id, customer_id: s.customer_id, total: String(s.total_venda), forma_pagamento: s.forma_pagamento === "parcelado" ? "pix" : s.forma_pagamento, data_compra: s.data_compra })}>
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-primary/10" onClick={(e) => { e.stopPropagation(); setEditingSale({ id: s.id, customer_id: s.customer_id, total: String(s.total_venda), forma_pagamento: s.forma_pagamento === "parcelado" ? "pix" : s.forma_pagamento, data_compra: s.data_compra }); }}>
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
                           )}
-                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => {
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={(e) => {
+                            e.stopPropagation();
                             if (s.forma_pagamento !== "parcelado" && s.status === "pago") {
                               setPendingDeleteSale(s);
                               setDeleteReason("");
@@ -633,10 +635,11 @@ export default function Vendas() {
                   ) : filteredInstallments.length === 0 ? (
                     <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma parcela encontrada</TableCell></TableRow>
                   ) : paginatedInstallments.map(i => (
-                    <TableRow key={i.id} className="hover:bg-primary/5 transition-colors">
+                    <TableRow key={i.id} className="cursor-pointer hover:bg-primary/5 transition-colors" onClick={() => navigate(`/clientes/${i.customer_id}`)}>
                       <TableCell>
                         {editingInstallment?.id === i.id ? (
                           <Input type="date" value={editingInstallment.vencimento}
+                            onClick={e => e.stopPropagation()}
                             onChange={e => setEditingInstallment({ ...editingInstallment, vencimento: e.target.value })}
                             className="h-8 w-36" />
                         ) : <span className="text-sm">{format(new Date(i.vencimento_data), "dd/MM/yyyy")}</span>}
@@ -647,9 +650,11 @@ export default function Vendas() {
                         {editingInstallment?.id === i.id ? (
                           <div className="flex gap-1 items-center">
                             <Input type="number" min={0.01} step="0.01" value={editingInstallment.valor}
+                              onClick={e => e.stopPropagation()}
                               onChange={e => setEditingInstallment({ ...editingInstallment, valor: e.target.value })}
                               className="h-8 w-24" />
-                            <Button size="sm" variant="ghost" className="h-8 px-2 text-success" onClick={() => {
+                            <Button size="sm" variant="ghost" className="h-8 px-2 text-success" onClick={(e) => {
+                              e.stopPropagation();
                               const v = parseFloat(editingInstallment.valor);
                               if (v > 0) updateInstallmentValue.mutate({ id: i.id, valor: v, vencimento: editingInstallment.vencimento });
                             }}><CheckCircle className="h-3.5 w-3.5" /></Button>
@@ -663,19 +668,21 @@ export default function Vendas() {
                         <div className="flex gap-1">
                           {i.status !== "pago" && getRemainingValue(i) > 0 && (
                             <>
-                              <Button size="sm" variant="ghost" className="gap-1 h-8 text-success hover:bg-success/10" onClick={() => {
+                              <Button size="sm" variant="ghost" className="gap-1 h-8 text-success hover:bg-success/10" onClick={(e) => {
+                                e.stopPropagation();
                                 setReceivingInstallment(i);
                                 setReceiveForm({ valor: String(getRemainingValue(i)), data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
                               }} disabled={receivePayment.isPending}>
                                 <CheckCircle className="h-3.5 w-3.5" />Receber
                               </Button>
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-primary/10" onClick={() => setEditingInstallment({ id: i.id, valor: String(i.valor_parcela), vencimento: i.vencimento_data })}>
+                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-primary/10" onClick={(e) => { e.stopPropagation(); setEditingInstallment({ id: i.id, valor: String(i.valor_parcela), vencimento: i.vencimento_data }); }}>
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
                             </>
                           )}
                           {getPaidValue(i) > 0 && (
-                            <Button size="sm" variant="ghost" className="gap-1 h-8 text-warning hover:bg-warning/10" onClick={() => {
+                            <Button size="sm" variant="ghost" className="gap-1 h-8 text-warning hover:bg-warning/10" onClick={(e) => {
+                              e.stopPropagation();
                               if (confirm("Desfazer recebimento desta parcela? O valor recebido será removido do caixa.")) {
                                 undoInstallmentPayment.mutate(i.id);
                               }
@@ -683,7 +690,7 @@ export default function Vendas() {
                               <Undo2 className="h-3.5 w-3.5" />Desfazer
                             </Button>
                           )}
-                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => deleteInstallment.mutate(i.id)}>
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); deleteInstallment.mutate(i.id); }}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
