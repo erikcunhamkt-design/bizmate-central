@@ -249,7 +249,7 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
 
   return (
     <Dialog open={!!customerId} onOpenChange={(v) => { if (!v) { setEditing(false); onClose(); } }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <div className="flex items-center justify-between w-full">
             <DialogTitle className="flex items-center gap-3">
