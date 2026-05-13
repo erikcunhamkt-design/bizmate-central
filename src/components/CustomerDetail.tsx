@@ -389,22 +389,24 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
               <Package className="h-3.5 w-3.5" /> Produtos Comprados
             </h3>
             <div className="border border-border/50 rounded-xl overflow-hidden">
-              <Table>
-                <TableHeader><TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs font-semibold">Produto</TableHead>
-                  <TableHead className="text-right text-xs font-semibold">Qtd</TableHead>
-                  <TableHead className="text-right text-xs font-semibold">Total</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {productsList.map((p, idx) => (
-                    <TableRow key={idx} className="hover:bg-primary/5">
-                      <TableCell className="text-sm font-medium">{p.nome}</TableCell>
-                      <TableCell className="text-right text-sm">{p.qtd}</TableCell>
-                      <TableCell className="text-right text-sm font-semibold">{formatBRL(p.total)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow className="hover:bg-transparent">
+                    <TableHead className="text-xs font-semibold">Produto</TableHead>
+                    <TableHead className="text-right text-xs font-semibold">Qtd</TableHead>
+                    <TableHead className="text-right text-xs font-semibold">Total</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {productsList.map((p, idx) => (
+                      <TableRow key={idx} className="hover:bg-primary/5">
+                        <TableCell className="text-sm font-medium">{p.nome}</TableCell>
+                        <TableCell className="text-right text-sm">{p.qtd}</TableCell>
+                        <TableCell className="text-right text-sm font-semibold">{formatBRL(p.total)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
         )}
@@ -417,24 +419,26 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
             <p className="text-sm text-muted-foreground text-center py-4">Nenhuma venda registrada</p>
           ) : (
             <div className="border border-border/50 rounded-xl overflow-hidden">
-              <Table>
-                <TableHeader><TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs font-semibold">Data</TableHead>
-                  <TableHead className="text-xs font-semibold">Total</TableHead>
-                  <TableHead className="text-xs font-semibold">Pagamento</TableHead>
-                  <TableHead className="text-xs font-semibold">Status</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {sales.map(s => (
-                    <TableRow key={s.id} className="hover:bg-primary/5">
-                      <TableCell className="text-sm">{format(new Date(s.data_compra), "dd/MM/yyyy")}</TableCell>
-                      <TableCell className="text-sm font-semibold">{formatBRL(s.total_venda)}</TableCell>
-                      <TableCell><span className="capitalize text-xs bg-muted px-2 py-0.5 rounded-md">{s.forma_pagamento}</span></TableCell>
-                      <TableCell><StatusBadge status={s.status} /></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow className="hover:bg-transparent">
+                    <TableHead className="text-xs font-semibold">Data</TableHead>
+                    <TableHead className="text-xs font-semibold">Total</TableHead>
+                    <TableHead className="text-xs font-semibold">Pagamento</TableHead>
+                    <TableHead className="text-xs font-semibold">Status</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {sales.map(s => (
+                      <TableRow key={s.id} className="hover:bg-primary/5">
+                        <TableCell className="text-sm">{format(new Date(s.data_compra), "dd/MM/yyyy")}</TableCell>
+                        <TableCell className="text-sm font-semibold">{formatBRL(s.total_venda)}</TableCell>
+                        <TableCell><span className="capitalize text-xs bg-muted px-2 py-0.5 rounded-md">{s.forma_pagamento}</span></TableCell>
+                        <TableCell><StatusBadge status={s.status} /></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </div>
@@ -445,24 +449,26 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
               <CreditCard className="h-3.5 w-3.5" /> Venda x Pagamento
             </h3>
             <div className="border border-border/50 rounded-xl overflow-hidden">
-              <Table>
-                <TableHeader><TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs font-semibold">Venda</TableHead>
-                  <TableHead className="text-xs font-semibold">Total</TableHead>
-                  <TableHead className="text-xs font-semibold">Pago</TableHead>
-                  <TableHead className="text-xs font-semibold">Falta</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {salePaymentRows.map(({ sale, paid, pending }) => (
-                    <TableRow key={sale.id} className="hover:bg-primary/5">
-                      <TableCell className="text-sm">{format(new Date(sale.data_compra), "dd/MM/yyyy")}</TableCell>
-                      <TableCell className="text-sm font-semibold">{formatBRL(sale.total_venda)}</TableCell>
-                      <TableCell className="text-sm font-semibold text-success">{formatBRL(paid)}</TableCell>
-                      <TableCell className={`text-sm font-semibold ${pending > 0 ? "text-destructive" : "text-muted-foreground"}`}>{formatBRL(pending)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow className="hover:bg-transparent">
+                    <TableHead className="text-xs font-semibold">Venda</TableHead>
+                    <TableHead className="text-xs font-semibold">Total</TableHead>
+                    <TableHead className="text-xs font-semibold">Pago</TableHead>
+                    <TableHead className="text-xs font-semibold">Falta</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {salePaymentRows.map(({ sale, paid, pending }) => (
+                      <TableRow key={sale.id} className="hover:bg-primary/5">
+                        <TableCell className="text-sm">{format(new Date(sale.data_compra), "dd/MM/yyyy")}</TableCell>
+                        <TableCell className="text-sm font-semibold">{formatBRL(sale.total_venda)}</TableCell>
+                        <TableCell className="text-sm font-semibold text-success">{formatBRL(paid)}</TableCell>
+                        <TableCell className={`text-sm font-semibold ${pending > 0 ? "text-destructive" : "text-muted-foreground"}`}>{formatBRL(pending)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
         )}
@@ -556,39 +562,41 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Parcelas</h3>
             <div className="border border-border/50 rounded-xl overflow-hidden">
-              <Table>
-                <TableHeader><TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs font-semibold">Vencimento</TableHead>
-                  <TableHead className="text-xs font-semibold">Parcela</TableHead>
-                  <TableHead className="text-xs font-semibold">Valor</TableHead>
-                  <TableHead className="text-xs font-semibold">Recebido</TableHead>
-                  <TableHead className="text-xs font-semibold">Falta</TableHead>
-                  <TableHead className="text-xs font-semibold">Status</TableHead>
-                  <TableHead></TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {installments.map(i => (
-                    <TableRow key={i.id} className={`hover:bg-primary/5 ${i.status === "pendente" && new Date(i.vencimento_data) < today ? "bg-destructive/5" : ""}`}>
-                      <TableCell className="text-sm">{format(new Date(i.vencimento_data), "dd/MM/yyyy")}</TableCell>
-                      <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-md">{i.numero_parcela}/{i.total_parcelas}</span></TableCell>
-                      <TableCell className="text-sm font-semibold">{formatBRL(i.valor_parcela)}</TableCell>
-                      <TableCell className="text-sm font-semibold text-success">{formatBRL(getPaidValue(i))}</TableCell>
-                      <TableCell className={`text-sm font-semibold ${getRemainingValue(i) > 0 ? "text-warning" : "text-muted-foreground"}`}>{formatBRL(getRemainingValue(i))}</TableCell>
-                      <TableCell><StatusBadge status={i.status} vencimento={i.vencimento_data} /></TableCell>
-                      <TableCell>
-                        {i.status !== "pago" && getRemainingValue(i) > 0 && (
-                          <Button size="sm" variant="ghost" className="h-8 gap-1 text-success hover:bg-success/10" onClick={() => {
-                            setReceivingInstallment(i);
-                            setReceiveForm({ valor: String(getRemainingValue(i)), data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
-                          }} disabled={receivePaymentMutation.isPending}>
-                            <CheckCircle className="h-3.5 w-3.5" />Receber
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow className="hover:bg-transparent">
+                    <TableHead className="text-xs font-semibold">Vencimento</TableHead>
+                    <TableHead className="text-xs font-semibold">Parcela</TableHead>
+                    <TableHead className="text-xs font-semibold">Valor</TableHead>
+                    <TableHead className="text-xs font-semibold">Recebido</TableHead>
+                    <TableHead className="text-xs font-semibold">Falta</TableHead>
+                    <TableHead className="text-xs font-semibold">Status</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {installments.map(i => (
+                      <TableRow key={i.id} className={`hover:bg-primary/5 ${i.status === "pendente" && new Date(i.vencimento_data) < today ? "bg-destructive/5" : ""}`}>
+                        <TableCell className="text-sm">{format(new Date(i.vencimento_data), "dd/MM/yyyy")}</TableCell>
+                        <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-md">{i.numero_parcela}/{i.total_parcelas}</span></TableCell>
+                        <TableCell className="text-sm font-semibold">{formatBRL(i.valor_parcela)}</TableCell>
+                        <TableCell className="text-sm font-semibold text-success">{formatBRL(getPaidValue(i))}</TableCell>
+                        <TableCell className={`text-sm font-semibold ${getRemainingValue(i) > 0 ? "text-warning" : "text-muted-foreground"}`}>{formatBRL(getRemainingValue(i))}</TableCell>
+                        <TableCell><StatusBadge status={i.status} vencimento={i.vencimento_data} /></TableCell>
+                        <TableCell>
+                          {i.status !== "pago" && getRemainingValue(i) > 0 && (
+                            <Button size="sm" variant="ghost" className="h-8 gap-1 text-success hover:bg-success/10" onClick={() => {
+                              setReceivingInstallment(i);
+                              setReceiveForm({ valor: String(getRemainingValue(i)), data: format(new Date(), "yyyy-MM-dd"), metodo: "pix", observacoes: "" });
+                            }} disabled={receivePaymentMutation.isPending}>
+                              <CheckCircle className="h-3.5 w-3.5" />Receber
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
         )}
