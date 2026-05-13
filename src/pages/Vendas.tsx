@@ -11,7 +11,7 @@ import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
 import { endOfMonth, format, startOfMonth } from "date-fns";
 import { useSearchParams } from "react-router-dom";
-import { CalendarDays, CheckCircle, DollarSign, Plus, Trash2, Pencil, ShoppingCart, CreditCard, Search, X } from "lucide-react";
+import { CalendarDays, CheckCircle, DollarSign, Plus, Trash2, Pencil, ShoppingCart, CreditCard, Search, X, Undo2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -190,6 +190,22 @@ export default function Vendas() {
       setEditingInstallment(null);
       toast({ title: "Parcela atualizada!" });
     },
+  });
+
+  const undoInstallmentPayment = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).rpc("undo_installment_payment", { p_installment_id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-installments"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-payment-history"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-movements"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast({ title: "Recebimento desfeito!" });
+    },
+    onError: (e: any) => toast({ title: "Erro ao desfazer", description: e.message, variant: "destructive" }),
   });
 
   const updateSale = useMutation({
@@ -657,6 +673,15 @@ export default function Vendas() {
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
                             </>
+                          )}
+                          {getPaidValue(i) > 0 && (
+                            <Button size="sm" variant="ghost" className="gap-1 h-8 text-warning hover:bg-warning/10" onClick={() => {
+                              if (confirm("Desfazer recebimento desta parcela? O valor recebido será removido do caixa.")) {
+                                undoInstallmentPayment.mutate(i.id);
+                              }
+                            }} disabled={undoInstallmentPayment.isPending} title="Desfazer recebimento">
+                              <Undo2 className="h-3.5 w-3.5" />Desfazer
+                            </Button>
                           )}
                           <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => deleteInstallment.mutate(i.id)}>
                             <Trash2 className="h-3.5 w-3.5" />
