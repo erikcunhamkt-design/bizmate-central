@@ -1,241 +1,102 @@
+# Plano de melhorias para deixar o BizMate excelente
 
-# Plano para organizar pagamentos maiores que a parcela
+Após analisar o app completo, identifiquei 6 melhorias de alto impacto que elevam o app de "bom" para "excelente".
 
-## Ideia principal
+---
 
-Criar um fluxo chamado **Receber pagamento** em vez de apenas “Pagar parcela”.
+## 1. Recibos e comprovantes em PDF
 
-Quando o cliente pagar um valor maior que a parcela atual, o app não vai “bagunçar” o valor original da venda nem apagar parcelas futuras. Ele vai registrar o dinheiro recebido e distribuir esse valor nas parcelas em aberto, mantendo histórico claro.
+**Problema:** Ao receber pagamento, não há comprovante para entregar ao cliente.
 
-Exemplo:
+**Solução:**
+- Botão "Gerar recibo" no modal de recebimento e no histórico do cliente.
+- PDF com: logo/nome da empresa, dados do cliente, valor recebido, data, método, parcelas abatidas, operador que registrou.
+- Layout profissional, pronto para imprimir ou enviar por WhatsApp.
 
-```text
-Venda parcelada: R$ 600 em 3x de R$ 200
+**Valor:** Profissionalismo e rastreabilidade para o cliente.
 
-Parcela 1 vence em abril: R$ 200
-Cliente paga R$ 300
+---
 
-Resultado:
-- Parcela 1: paga com R$ 200
-- Parcela 2: fica parcialmente abatida com R$ 100
-- Caixa do mês atual: entra R$ 300
-- A receber futuro: diminui R$ 300
-```
+## 2. Fechamento de caixa diário
 
-Assim o app separa duas coisas importantes:
+**Problema:** Não há controle de quando o caixa foi aberto/fechado nem saldo conferido.
 
-```text
-Dinheiro recebido no mês = quando o cliente pagou
-Valor a receber = quanto ainda falta das parcelas
-```
+**Solução:**
+- Tela de "Caixa" com: abrir caixa (saldo inicial), registrar sangria/suprimento, fechar caixa (saldo final + conferência).
+- Comparar saldo teórico vs real no fechamento.
+- Histórico de fechamentos por dia com: entradas, saídas, saldo inicial, final, diferença.
+- Vincular todas as movimentações do dia ao fechamento.
 
-## Regras de negócio
+**Valor:** Segurança financeira e auditoria diária.
 
-1. **A venda original não muda**
-   - O total vendido continua igual.
-   - As parcelas originais continuam existindo.
-   - Isso evita confusão em relatórios e histórico.
+---
 
-2. **O pagamento maior vira abatimento**
-   - Primeiro quita a parcela selecionada.
-   - O excedente vai automaticamente para as próximas parcelas pendentes do mesmo cliente/venda, por ordem de vencimento.
+## 3. Ranking e analytics inteligentes
 
-3. **Parcela pode ter 3 estados**
-   - `pendente`: nada pago ainda.
-   - `parcial`: recebeu parte do valor, mas ainda falta.
-   - `pago`: recebeu o valor total da parcela.
+**Problema:** Não há visão de quem são os melhores clientes nem os produtos mais vendidos.
 
-4. **Não permitir pagar mais que o saldo em aberto**
-   - Se a venda ainda tem R$ 500 em aberto, o app não deve aceitar pagamento de R$ 600 sem aviso.
-   - Isso evita “crédito solto” sem controle.
-   - Podemos futuramente criar “saldo/crédito do cliente”, mas para agora o mais seguro é bloquear excesso acima da dívida total.
+**Solução:**
+- Nova aba "Analytics" no Dashboard ou página dedicada.
+- Top 10 clientes por valor comprado e por frequência.
+- Produtos mais vendidos (quantidade e faturamento).
+- Curva ABC de produtos (20% dos produtos que geram 80% do faturamento).
+- Ticket médio por cliente e por mês.
+- Taxa de inadimplência (% de clientes com atraso).
 
-5. **Entrada financeira é registrada uma única vez**
-   - Se o cliente pagou R$ 300, entra apenas um lançamento de R$ 300 no caixa.
-   - Mesmo que esse valor quite uma parcela e abata outra, não devem ser criadas entradas duplicadas.
+**Valor:** Decisões de negócio baseadas em dados, não intuição.
 
-## O que será alterado na interface
+---
 
-### Em Vendas > Parcelas
+## 4. Orçamentos / pré-vendas
 
-Trocar o botão atual **Pagar** por **Receber**.
+**Problema:** Toda venda é definitiva. Não há como fazer orçamento antes de fechar.
 
-Ao clicar, abrir um modal com:
+**Solução:**
+- Status "orçamento" na tabela `sales` (além de "ativa" / "pago" / "cancelada").
+- No fluxo de vendas, opção "Salvar como orçamento".
+- Tela de orçamentos pendentes com botão "Converter em venda".
+- Vencimento do orçamento (ex: válido por 7 dias).
 
-- Cliente
-- Parcela selecionada
-- Valor da parcela
-- Valor já recebido
-- Valor restante
-- Campo: **Valor recebido**
-- Campo: **Data do pagamento**
-- Campo: **Forma de recebimento**
-- Campo opcional: **Observação**
-- Prévia automática da distribuição
+**Valor:** Aumenta conversão de vendas e organiza o funil comercial.
 
-Exemplo da prévia:
+---
 
-```text
-Você está recebendo R$ 300,00
+## 5. Tags e limite de crédito por cliente
 
-Aplicação:
-- Parcela 1/3: R$ 200,00 — ficará paga
-- Parcela 2/3: R$ 100,00 — ficará parcialmente paga
+**Problema:** Clientes são apenas "ativo" ou "inativo". Não há segmentação nem controle de risco.
 
-Entrada no caixa: R$ 300,00 em 21/04/2026
-```
+**Solução:**
+- Campo `tags` (array de textos) na tabela `customers`.
+- Tags sugeridas: VIP, Atraso frequente, Novo, Indicado, etc.
+- Campo `limite_credito` (numeric) no cliente.
+- Ao criar venda parcelada, verificar se total em aberto + nova venda > limite.
+- Alerta visual no detalhe do cliente quando próximo do limite.
 
-### Na tabela de parcelas
+**Valor:** Controle de risco de inadimplência e marketing segmentado.
 
-Adicionar informações mais claras:
+---
 
-```text
-Parcela | Valor | Recebido | Falta | Status
-1/3     | 200   | 200      | 0     | Pago
-2/3     | 200   | 100      | 100   | Parcial
-3/3     | 200   | 0        | 200   | Pendente
-```
+## 6. Backup completo e exportação em massa
 
-### Dentro do cliente
+**Problema:** Não há forma de extrair todos os dados do sistema.
 
-Na seção **Venda x Pagamento**, mostrar:
+**Solução:**
+- Nova página "Configurações" com seção "Exportar dados".
+- Exportar em CSV: clientes, produtos, vendas, parcelas, contas, movimentações de caixa.
+- Exportar em PDF: relatório completo do mês (DRE simplificada).
+- Opção de agendar exportação automática mensal.
 
-- Total da venda
-- Total recebido
-- Total pendente
-- Progresso do pagamento
+**Valor:** Segurança de dados e conformidade contábil.
 
-E nas parcelas do cliente:
+---
 
-- Valor original
-- Valor recebido
-- Valor faltante
-- Histórico dos pagamentos/abatimentos
+## Ordem de implementação sugerida
 
-## Alterações técnicas
+1. **Recibos em PDF** — impacto imediato no dia a dia.
+2. **Fechamento de caixa** — segurança financeira.
+3. **Tags e limite de crédito** — proteção contra calote.
+4. **Orçamentos** — aumento de vendas.
+5. **Ranking e analytics** — inteligência de negócio.
+6. **Backup completo** — tranquilidade e compliance.
 
-### Banco de dados
-
-Criar duas tabelas novas.
-
-#### 1. `customer_payments`
-
-Guarda o pagamento real que entrou no caixa.
-
-Campos principais:
-
-- `id`
-- `user_id`
-- `customer_id`
-- `sale_id`
-- `valor_total`
-- `data_pagamento`
-- `metodo_recebimento`
-- `observacoes`
-- `created_at`
-
-#### 2. `payment_allocations`
-
-Guarda como o pagamento foi distribuído entre as parcelas.
-
-Campos principais:
-
-- `id`
-- `user_id`
-- `payment_id`
-- `installment_id`
-- `valor_aplicado`
-- `tipo`
-  - `parcela`
-  - `abatimento`
-- `created_at`
-
-Exemplo:
-
-```text
-customer_payments
-Pagamento: R$ 300
-
-payment_allocations
-- R$ 200 na parcela 1
-- R$ 100 na parcela 2
-```
-
-### Atualização das parcelas
-
-Ao registrar pagamento:
-
-1. Buscar parcelas pendentes/parciais da mesma venda.
-2. Calcular quanto falta em cada parcela.
-3. Aplicar o pagamento na ordem de vencimento.
-4. Atualizar:
-   - `pago_valor`
-   - `pago_em`
-   - `metodo_recebimento`
-   - `status`
-5. Criar um único lançamento em `cash_movements` com o valor total recebido.
-6. Invalidar os dados de:
-   - Vendas
-   - Parcelas
-   - Cliente
-   - Dashboard
-   - Financeiro
-   - Metas de faturamento
-
-### Dashboard
-
-Atualizar os cálculos para considerar pagamento parcial/abatimento:
-
-- **Entradas**: continuam vindo do caixa, pela data real do pagamento.
-- **A receber parcelado**: soma apenas o que ainda falta nas parcelas.
-- **A receber no mês**: soma o saldo restante das parcelas que vencem no mês.
-- **Clientes atrasados**: considerar apenas parcelas com saldo restante.
-- **Vence hoje**: considerar pendentes e parciais que ainda têm saldo.
-
-### Gráficos e financeiro
-
-Garantir que:
-
-- O gráfico de recebido use o valor real recebido no mês.
-- O total vendido continue vindo das vendas.
-- O contas/financeiro mostre uma única entrada por pagamento recebido.
-- Abatimentos futuros reduzam o “a receber” sem criar receita duplicada no mês futuro.
-
-## Arquivos que serão ajustados
-
-- `src/pages/Vendas.tsx`
-  - Novo modal de recebimento.
-  - Nova lógica de pagamento com abatimento.
-  - Tabela de parcelas com recebido/falta.
-
-- `src/components/CustomerDetail.tsx`
-  - Atualizar “Venda x Pagamento”.
-  - Mostrar parcelas parciais.
-  - Mostrar histórico de pagamentos/abatimentos.
-
-- `src/hooks/useDashboardData.ts`
-  - Recalcular valores a receber usando saldo restante, não apenas `valor_parcela`.
-
-- `src/hooks/useMonthlySalesData.ts`
-  - Ajustar recebido mensal para refletir pagamentos reais.
-
-- `src/pages/Financeiro.tsx`
-  - Melhorar descrição das entradas de pagamentos parcelados.
-
-- Nova migration do banco
-  - Criar `customer_payments`.
-  - Criar `payment_allocations`.
-  - Criar políticas de segurança por usuário.
-
-## Resultado esperado
-
-Depois disso, quando o cliente pagar mais que uma parcela:
-
-```text
-O caixa mostra exatamente o dinheiro que entrou.
-A parcela atual fica paga.
-A próxima parcela já aparece abatida.
-O dashboard reduz o valor a receber.
-O histórico do cliente mostra tudo de forma organizada.
-Os relatórios não duplicam receita.
-```
+Cada item pode ser implementado de forma independente. Quer que eu comece por algum específico?
