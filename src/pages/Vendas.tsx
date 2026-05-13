@@ -190,9 +190,23 @@ export default function Vendas() {
       setEditingInstallment(null);
       toast({ title: "Parcela atualizada!" });
     },
+
+  const undoInstallmentPayment = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).rpc("undo_installment_payment", { p_installment_id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-installments"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-payment-history"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-movements"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast({ title: "Recebimento desfeito!" });
+    },
+    onError: (e: any) => toast({ title: "Erro ao desfazer", description: e.message, variant: "destructive" }),
   });
 
-  const updateSale = useMutation({
     mutationFn: async ({ id, customer_id, total, forma_pagamento, data_compra }: { id: string; customer_id: string; total: number; forma_pagamento: string; data_compra: string }) => {
       if (total <= 0) throw new Error("Informe um valor válido");
       const { error } = await supabase.from("sales").update({ customer_id, total_venda: total, forma_pagamento, data_compra }).eq("id", id);
