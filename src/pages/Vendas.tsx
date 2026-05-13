@@ -674,6 +674,15 @@ export default function Vendas() {
                               </Button>
                             </>
                           )}
+                          {getPaidValue(i) > 0 && (
+                            <Button size="sm" variant="ghost" className="gap-1 h-8 text-warning hover:bg-warning/10" onClick={() => {
+                              if (confirm("Desfazer recebimento desta parcela? O valor recebido será removido do caixa.")) {
+                                undoInstallmentPayment.mutate(i.id);
+                              }
+                            }} disabled={undoInstallmentPayment.isPending} title="Desfazer recebimento">
+                              <Undo2 className="h-3.5 w-3.5" />Desfazer
+                            </Button>
+                          )}
                           <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" onClick={() => deleteInstallment.mutate(i.id)}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
