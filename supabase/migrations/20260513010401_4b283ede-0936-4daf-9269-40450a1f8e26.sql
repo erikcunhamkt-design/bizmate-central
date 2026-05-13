@@ -1,0 +1,2 @@
+ALTER TABLE public.cash_movements DROP CONSTRAINT IF EXISTS cash_movements_origem_check;
+ALTER TABLE public.cash_movements ADD CONSTRAINT cash_movements_origem_check CHECK (origem = ANY (ARRAY['parcela'::text, 'conta'::text, 'ajuste'::text, 'manual'::text, 'recebimento'::text, 'venda'::text]));
