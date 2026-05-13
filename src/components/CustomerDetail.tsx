@@ -18,8 +18,9 @@ import { buildAllocationPreview, getCustomerActivityStatus, getPaidValue, getRem
 import { useOperator } from "@/hooks/useOperator";
 import {
   ShoppingCart, CheckCircle, AlertTriangle, Package, MapPin, User,
-  Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX, CreditCard
+  Clock, CalendarDays, Pencil, X, Save, UserCheck, UserX, CreditCard, FileDown
 } from "lucide-react";
+import { generateReceiptPDF } from "@/lib/receipt";
 
 type CustomerPayment = {
   id: string;
@@ -521,6 +522,29 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                   <div className="divide-y divide-border/50">
                     {payments.map((payment) => {
                       const paymentAllocations = allocations.filter((allocation) => allocation.payment_id === payment.id);
+                      const handleDownload = () => {
+                        generateReceiptPDF({
+                          cliente: customerName,
+                          clienteCpf: (customer as any)?.cpf ?? null,
+                          valorTotal: Number(payment.valor_total),
+                          data: payment.data_pagamento,
+                          metodo: payment.metodo_recebimento,
+                          operador: payment.operador,
+                          observacoes: payment.observacoes,
+                          vendaData: sale.data_compra,
+                          vendaTotal: Number(sale.total_venda),
+                          numeroRecibo: payment.id.slice(0, 8).toUpperCase(),
+                          alocacoes: paymentAllocations.map((a) => {
+                            const inst = installments.find((i) => i.id === a.installment_id);
+                            return {
+                              numero_parcela: inst?.numero_parcela ?? 0,
+                              total_parcelas: inst?.total_parcelas ?? 0,
+                              valor_aplicado: Number(a.valor_aplicado),
+                              tipo: a.tipo,
+                            };
+                          }),
+                        });
+                      };
                       return (
                         <div key={payment.id} className="p-3 space-y-2">
                           <div className="flex items-start justify-between gap-3">
@@ -531,7 +555,12 @@ export function CustomerDetail({ customerId, customerName, onClose }: CustomerDe
                               </p>
                               {payment.observacoes && <p className="text-xs text-muted-foreground mt-1">{payment.observacoes}</p>}
                             </div>
-                            <span className="text-[11px] bg-success/10 text-success border border-success/20 rounded-md px-2 py-0.5 font-semibold">Recebimento</span>
+                            <div className="flex items-center gap-2">
+                              <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={handleDownload}>
+                                <FileDown className="h-3 w-3" />Recibo
+                              </Button>
+                              <span className="text-[11px] bg-success/10 text-success border border-success/20 rounded-md px-2 py-0.5 font-semibold">Recebimento</span>
+                            </div>
                           </div>
                           <div className="rounded-lg bg-muted/30 border border-border/40 overflow-hidden">
                             {paymentAllocations.map((allocation) => {
