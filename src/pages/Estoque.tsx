@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/lib/currency";
-import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2, TrendingUp, TrendingDown, BarChart3, Archive, FileDown, FileSpreadsheet, History } from "lucide-react";
+import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2, TrendingUp, TrendingDown, BarChart3, Archive, FileDown, FileSpreadsheet, History, CalendarClock } from "lucide-react";
 import { motion } from "framer-motion";
 import { PaginationControls } from "@/components/PaginationControls";
 import { ProductForm } from "@/components/ProductForm";
