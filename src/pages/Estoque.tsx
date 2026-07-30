@@ -160,8 +160,9 @@ export default function Estoque() {
 
   const stats = [
     { label: "Produtos", value: products.length, icon: PackageIcon, color: "text-primary" },
-    { label: "Valor em Estoque", value: formatBRL(totalEstoqueValor), icon: Archive, color: "text-primary" },
-    { label: "Potencial de Venda", value: formatBRL(totalEstoqueVenda), icon: TrendingUp, color: "text-success" },
+    { label: "Valor em Estoque (custo)", value: formatBRL(totalEstoqueValor), icon: Archive, color: "text-primary" },
+    { label: "Valor em Estoque (venda)", value: formatBRL(totalEstoqueVenda), icon: TrendingUp, color: "text-success" },
+
     { label: "Margem Média", value: `${avgMargem.toFixed(1)}%`, icon: BarChart3, color: avgMargem >= 30 ? "text-success" : "text-warning" },
     { label: "Validade (vencendo/vencidos)", value: `${nearExpiryCount} / ${expiredCount}`, icon: CalendarClock, color: expiredCount > 0 ? "text-destructive" : nearExpiryCount > 0 ? "text-warning" : "text-muted-foreground" },
   ];
