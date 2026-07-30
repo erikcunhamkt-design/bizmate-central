@@ -71,6 +71,8 @@ export default function Estoque() {
         categoria: form.categoria || null,
         sku: form.sku || null,
         foto_url: form.foto_url || null,
+        validade: form.validade || null,
+
         user_id: user!.id,
       });
       if (error) throw error;
