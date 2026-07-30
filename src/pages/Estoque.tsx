@@ -128,9 +128,12 @@ export default function Estoque() {
   const filtered = products.filter(p => {
     const matchSearch = p.nome.toLowerCase().includes(search.toLowerCase()) || p.categoria?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase());
     const matchCategory = categoryFilter === "todos" || p.categoria === categoryFilter;
+    const exp = getExpiryInfo((p as any).validade);
     const matchStock = stockFilter === "todos" ? true :
       stockFilter === "baixo" ? (p.estoque_atual <= p.alerta_estoque_minimo && p.estoque_atual > 0) :
       stockFilter === "zerado" ? p.estoque_atual === 0 :
+      stockFilter === "vencido" ? exp?.status === "vencido" :
+      stockFilter === "vencendo" ? exp?.status === "vencendo" :
       p.estoque_atual > p.alerta_estoque_minimo;
     return matchSearch && matchCategory && matchStock;
   });
@@ -142,7 +145,10 @@ export default function Estoque() {
   const totalEstoqueVenda = products.reduce((acc, p) => acc + (p.estoque_atual * p.preco_padrao), 0);
   const lowStockCount = products.filter(p => p.estoque_atual <= p.alerta_estoque_minimo && p.estoque_atual > 0).length;
   const zeroStockCount = products.filter(p => p.estoque_atual === 0).length;
+  const expiredCount = products.filter(p => getExpiryInfo((p as any).validade)?.status === "vencido").length;
+  const nearExpiryCount = products.filter(p => getExpiryInfo((p as any).validade)?.status === "vencendo").length;
   const avgMargem = products.length > 0 ? products.reduce((acc, p) => acc + calcMargem(p.custo_unitario, p.preco_padrao), 0) / products.length : 0;
+
 
   const openEdit = (p: any) => {
     setEditingProduct({
