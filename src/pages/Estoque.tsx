@@ -254,6 +254,9 @@ export default function Estoque() {
                 <SelectItem value="normal">Normal</SelectItem>
                 <SelectItem value="baixo">Estoque baixo</SelectItem>
                 <SelectItem value="zerado">Zerado</SelectItem>
+                <SelectItem value="vencendo">Perto do vencimento</SelectItem>
+                <SelectItem value="vencido">Vencidos</SelectItem>
+
               </SelectContent>
             </Select>
           </div>
