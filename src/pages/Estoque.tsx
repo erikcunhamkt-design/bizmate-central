@@ -327,6 +327,18 @@ export default function Estoque() {
                           </div>
                         </TableCell>
                         <TableCell>
+                          {exp ? (
+                            <div className="flex items-center gap-1.5">
+                              {exp.status !== "ok" && <AlertTriangle className={`h-3.5 w-3.5 ${exp.status === "vencido" ? "text-destructive" : "text-warning"}`} />}
+                              <span className="text-xs text-muted-foreground">
+                                {(p as any).validade.split("-").reverse().join("/")}
+                              </span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${exp.className}`}>{exp.label}</span>
+                            </div>
+                          ) : <span className="text-xs text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell>
+
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm(p.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
