@@ -208,7 +208,7 @@ export default function Estoque() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {stats.map((stat) => (
           <Card key={stat.label} className="border-border/50">
             <CardContent className="p-4 flex items-center gap-3">
