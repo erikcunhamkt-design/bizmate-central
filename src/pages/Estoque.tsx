@@ -20,7 +20,22 @@ import { exportEstoqueCSV, exportEstoquePDF } from "@/lib/exportEstoque";
 
 const PAGE_SIZE = 15;
 
-const emptyForm = { nome: "", custo_unitario: "", preco_padrao: "", estoque_atual: "", alerta_estoque_minimo: "5", categoria: "", sku: "", foto_url: "" };
+const emptyForm = { nome: "", custo_unitario: "", preco_padrao: "", estoque_atual: "", alerta_estoque_minimo: "5", categoria: "", sku: "", foto_url: "", validade: "" };
+
+const EXPIRY_ALERT_DAYS = 30;
+
+function getExpiryInfo(validade?: string | null) {
+  if (!validade) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [y, m, d] = validade.split("-").map(Number);
+  const date = new Date(y, (m || 1) - 1, d || 1);
+  const days = Math.round((date.getTime() - today.getTime()) / 86400000);
+  if (days < 0) return { days, label: "VENCIDO", status: "vencido" as const, className: "bg-destructive/10 text-destructive" };
+  if (days <= EXPIRY_ALERT_DAYS) return { days, label: days === 0 ? "VENCE HOJE" : `${days}d`, status: "vencendo" as const, className: "bg-warning/10 text-warning" };
+  return { days, label: `${days}d`, status: "ok" as const, className: "text-muted-foreground" };
+}
+
 
 export default function Estoque() {
   const { user } = useAuth();
