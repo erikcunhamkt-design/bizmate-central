@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/lib/currency";
-import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2, TrendingUp, TrendingDown, BarChart3, Archive, FileDown, FileSpreadsheet, History } from "lucide-react";
+import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2, TrendingUp, TrendingDown, BarChart3, Archive, FileDown, FileSpreadsheet, History, CalendarClock } from "lucide-react";
 import { motion } from "framer-motion";
 import { PaginationControls } from "@/components/PaginationControls";
 import { ProductForm } from "@/components/ProductForm";
@@ -20,7 +20,22 @@ import { exportEstoqueCSV, exportEstoquePDF } from "@/lib/exportEstoque";
 
 const PAGE_SIZE = 15;
 
-const emptyForm = { nome: "", custo_unitario: "", preco_padrao: "", estoque_atual: "", alerta_estoque_minimo: "5", categoria: "", sku: "", foto_url: "" };
+const emptyForm = { nome: "", custo_unitario: "", preco_padrao: "", estoque_atual: "", alerta_estoque_minimo: "5", categoria: "", sku: "", foto_url: "", validade: "" };
+
+const EXPIRY_ALERT_DAYS = 30;
+
+function getExpiryInfo(validade?: string | null) {
+  if (!validade) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [y, m, d] = validade.split("-").map(Number);
+  const date = new Date(y, (m || 1) - 1, d || 1);
+  const days = Math.round((date.getTime() - today.getTime()) / 86400000);
+  if (days < 0) return { days, label: "VENCIDO", status: "vencido" as const, className: "bg-destructive/10 text-destructive" };
+  if (days <= EXPIRY_ALERT_DAYS) return { days, label: days === 0 ? "VENCE HOJE" : `${days}d`, status: "vencendo" as const, className: "bg-warning/10 text-warning" };
+  return { days, label: `${days}d`, status: "ok" as const, className: "text-muted-foreground" };
+}
+
 
 export default function Estoque() {
   const { user } = useAuth();
@@ -56,6 +71,8 @@ export default function Estoque() {
         categoria: form.categoria || null,
         sku: form.sku || null,
         foto_url: form.foto_url || null,
+        validade: form.validade || null,
+
         user_id: user!.id,
       });
       if (error) throw error;
@@ -80,6 +97,8 @@ export default function Estoque() {
         categoria: data.categoria || null,
         sku: data.sku || null,
         foto_url: data.foto_url || null,
+        validade: data.validade || null,
+
       }).eq("id", data.id);
       if (error) throw error;
     },
@@ -109,9 +128,12 @@ export default function Estoque() {
   const filtered = products.filter(p => {
     const matchSearch = p.nome.toLowerCase().includes(search.toLowerCase()) || p.categoria?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase());
     const matchCategory = categoryFilter === "todos" || p.categoria === categoryFilter;
+    const exp = getExpiryInfo((p as any).validade);
     const matchStock = stockFilter === "todos" ? true :
       stockFilter === "baixo" ? (p.estoque_atual <= p.alerta_estoque_minimo && p.estoque_atual > 0) :
       stockFilter === "zerado" ? p.estoque_atual === 0 :
+      stockFilter === "vencido" ? exp?.status === "vencido" :
+      stockFilter === "vencendo" ? exp?.status === "vencendo" :
       p.estoque_atual > p.alerta_estoque_minimo;
     return matchSearch && matchCategory && matchStock;
   });
@@ -123,13 +145,16 @@ export default function Estoque() {
   const totalEstoqueVenda = products.reduce((acc, p) => acc + (p.estoque_atual * p.preco_padrao), 0);
   const lowStockCount = products.filter(p => p.estoque_atual <= p.alerta_estoque_minimo && p.estoque_atual > 0).length;
   const zeroStockCount = products.filter(p => p.estoque_atual === 0).length;
+  const expiredCount = products.filter(p => getExpiryInfo((p as any).validade)?.status === "vencido").length;
+  const nearExpiryCount = products.filter(p => getExpiryInfo((p as any).validade)?.status === "vencendo").length;
   const avgMargem = products.length > 0 ? products.reduce((acc, p) => acc + calcMargem(p.custo_unitario, p.preco_padrao), 0) / products.length : 0;
+
 
   const openEdit = (p: any) => {
     setEditingProduct({
       id: p.id, nome: p.nome, custo_unitario: String(p.custo_unitario), preco_padrao: String(p.preco_padrao),
       estoque_atual: String(p.estoque_atual), alerta_estoque_minimo: String(p.alerta_estoque_minimo),
-      categoria: p.categoria || "", sku: p.sku || "", foto_url: p.foto_url || "",
+      categoria: p.categoria || "", sku: p.sku || "", foto_url: p.foto_url || "", validade: p.validade || "",
     });
   };
 
@@ -138,7 +163,9 @@ export default function Estoque() {
     { label: "Valor em Estoque", value: formatBRL(totalEstoqueValor), icon: Archive, color: "text-primary" },
     { label: "Potencial de Venda", value: formatBRL(totalEstoqueVenda), icon: TrendingUp, color: "text-success" },
     { label: "Margem Média", value: `${avgMargem.toFixed(1)}%`, icon: BarChart3, color: avgMargem >= 30 ? "text-success" : "text-warning" },
+    { label: "Validade (vencendo/vencidos)", value: `${nearExpiryCount} / ${expiredCount}`, icon: CalendarClock, color: expiredCount > 0 ? "text-destructive" : nearExpiryCount > 0 ? "text-warning" : "text-muted-foreground" },
   ];
+
 
   const [activeTab, setActiveTab] = useState("produtos");
 
@@ -181,7 +208,7 @@ export default function Estoque() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {stats.map((stat) => (
           <Card key={stat.label} className="border-border/50">
             <CardContent className="p-4 flex items-center gap-3">
@@ -227,6 +254,9 @@ export default function Estoque() {
                 <SelectItem value="normal">Normal</SelectItem>
                 <SelectItem value="baixo">Estoque baixo</SelectItem>
                 <SelectItem value="zerado">Zerado</SelectItem>
+                <SelectItem value="vencendo">Perto do vencimento</SelectItem>
+                <SelectItem value="vencido">Vencidos</SelectItem>
+
               </SelectContent>
             </Select>
           </div>
@@ -242,18 +272,21 @@ export default function Estoque() {
                     <TableHead className="font-semibold">Preço</TableHead>
                     <TableHead className="font-semibold">Margem</TableHead>
                     <TableHead className="font-semibold">Estoque</TableHead>
+                    <TableHead className="font-semibold">Validade</TableHead>
                     <TableHead className="w-20 text-right font-semibold">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">Carregando...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
                   ) : paginated.map(p => {
                     const margem = calcMargem(p.custo_unitario, p.preco_padrao);
                     const lowStock = p.estoque_atual <= p.alerta_estoque_minimo;
                     const zeroStock = p.estoque_atual === 0;
+                    const exp = getExpiryInfo((p as any).validade);
+
                     return (
                       <TableRow key={p.id} className="hover:bg-primary/5 transition-colors group">
                         <TableCell>
@@ -294,6 +327,18 @@ export default function Estoque() {
                           </div>
                         </TableCell>
                         <TableCell>
+                          {exp ? (
+                            <div className="flex items-center gap-1.5">
+                              {exp.status !== "ok" && <AlertTriangle className={`h-3.5 w-3.5 ${exp.status === "vencido" ? "text-destructive" : "text-warning"}`} />}
+                              <span className="text-xs text-muted-foreground">
+                                {(p as any).validade.split("-").reverse().join("/")}
+                              </span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${exp.className}`}>{exp.label}</span>
+                            </div>
+                          ) : <span className="text-xs text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell>
+
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm(p.id)}><Trash2 className="h-3.5 w-3.5" /></Button>

@@ -371,6 +371,7 @@ export type Database = {
           sku: string | null
           updated_at: string
           user_id: string
+          validade: string | null
         }
         Insert: {
           alerta_estoque_minimo?: number
@@ -387,6 +388,7 @@ export type Database = {
           sku?: string | null
           updated_at?: string
           user_id: string
+          validade?: string | null
         }
         Update: {
           alerta_estoque_minimo?: number
@@ -403,6 +405,7 @@ export type Database = {
           sku?: string | null
           updated_at?: string
           user_id?: string
+          validade?: string | null
         }
         Relationships: []
       }
