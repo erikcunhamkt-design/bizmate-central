@@ -97,6 +97,8 @@ export default function Estoque() {
         categoria: data.categoria || null,
         sku: data.sku || null,
         foto_url: data.foto_url || null,
+        validade: data.validade || null,
+
       }).eq("id", data.id);
       if (error) throw error;
     },
