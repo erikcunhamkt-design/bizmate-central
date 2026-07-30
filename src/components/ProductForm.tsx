@@ -12,7 +12,9 @@ interface ProductFormData {
   categoria: string;
   sku: string;
   foto_url: string;
+  validade: string;
 }
+
 
 interface ProductFormProps {
   data: ProductFormData;
