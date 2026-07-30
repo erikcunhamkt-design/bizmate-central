@@ -128,6 +128,18 @@ export function ProductForm({ data, setData, onSave, isPending, buttonLabel }: P
         </div>
       </div>
 
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-muted-foreground">Validade do Produto</Label>
+        <Input
+          type="date"
+          value={data.validade}
+          onChange={e => setData(f => ({ ...f, validade: e.target.value }))}
+          className="h-10"
+        />
+        <p className="text-[11px] text-muted-foreground">Opcional — alertamos 30 dias antes do vencimento.</p>
+      </div>
+
+
       <Button
         className="w-full h-11 gradient-primary font-semibold"
         disabled={!data.nome || !data.custo_unitario || !data.preco_padrao || isPending}
