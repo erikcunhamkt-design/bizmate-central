@@ -272,18 +272,21 @@ export default function Estoque() {
                     <TableHead className="font-semibold">Preço</TableHead>
                     <TableHead className="font-semibold">Margem</TableHead>
                     <TableHead className="font-semibold">Estoque</TableHead>
+                    <TableHead className="font-semibold">Validade</TableHead>
                     <TableHead className="w-20 text-right font-semibold">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">Carregando...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
                   ) : paginated.map(p => {
                     const margem = calcMargem(p.custo_unitario, p.preco_padrao);
                     const lowStock = p.estoque_atual <= p.alerta_estoque_minimo;
                     const zeroStock = p.estoque_atual === 0;
+                    const exp = getExpiryInfo((p as any).validade);
+
                     return (
                       <TableRow key={p.id} className="hover:bg-primary/5 transition-colors group">
                         <TableCell>
