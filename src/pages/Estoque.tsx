@@ -148,7 +148,7 @@ export default function Estoque() {
     setEditingProduct({
       id: p.id, nome: p.nome, custo_unitario: String(p.custo_unitario), preco_padrao: String(p.preco_padrao),
       estoque_atual: String(p.estoque_atual), alerta_estoque_minimo: String(p.alerta_estoque_minimo),
-      categoria: p.categoria || "", sku: p.sku || "", foto_url: p.foto_url || "",
+      categoria: p.categoria || "", sku: p.sku || "", foto_url: p.foto_url || "", validade: p.validade || "",
     });
   };
 
