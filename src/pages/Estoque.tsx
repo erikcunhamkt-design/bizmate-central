@@ -486,7 +486,7 @@ export default function Estoque() {
             </DialogTitle>
           </DialogHeader>
           {editingProduct && (
-            <ProductForm data={editingProduct} setData={setEditingProduct} onSave={() => updateMutation.mutate(editingProduct)} isPending={updateMutation.isPending} buttonLabel="Salvar Alterações" />
+            <ProductForm data={editingProduct} setData={setEditingProduct as any} onSave={() => updateMutation.mutate(editingProduct)} isPending={updateMutation.isPending} buttonLabel="Salvar Alterações" duplicateBarcodeName={duplicateFor(editingProduct)} />
           )}
         </DialogContent>
       </Dialog>
@@ -504,6 +504,32 @@ export default function Estoque() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Código não encontrado → cadastrar novo */}
+      <Dialog open={!!notFoundCode} onOpenChange={(v) => { if (!v) setNotFoundCode(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Código não cadastrado</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Nenhum produto encontrado com o código <span className="font-mono font-semibold text-foreground">{notFoundCode}</span>. Deseja cadastrar um novo produto com este código?
+          </p>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setNotFoundCode(null)}>Cancelar</Button>
+            <Button
+              className="gradient-primary font-semibold"
+              onClick={() => {
+                setForm({ ...emptyProductForm(), codigo_barras: notFoundCode || "" });
+                setNotFoundCode(null);
+                setOpen(true);
+              }}
+            >
+              Criar produto
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <ProductImportDialog open={importOpen} onOpenChange={setImportOpen} existingProducts={products} />
     </motion.div>
   );
+
 }
