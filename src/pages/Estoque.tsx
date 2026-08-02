@@ -44,11 +44,14 @@ export default function Estoque() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [scanCode, setScanCode] = useState("");
+  const [notFoundCode, setNotFoundCode] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("todos");
   const [stockFilter, setStockFilter] = useState("todos");
-  const [form, setForm] = useState(emptyForm);
-  const [editingProduct, setEditingProduct] = useState<any | null>(null);
+  const [form, setForm] = useState<ProductFormData>(emptyProductForm());
+  const [editingProduct, setEditingProduct] = useState<ProductFormData | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
@@ -62,55 +65,76 @@ export default function Estoque() {
     enabled: !!user,
   });
 
+  const productPayload = (data: ProductFormData) => ({
+    nome: data.nome,
+    custo_unitario: Number(data.custo_unitario) || 0,
+    preco_padrao: Number(data.preco_padrao) || 0,
+    preco_minimo: data.preco_minimo ? Number(data.preco_minimo) : null,
+    estoque_atual: Number(data.estoque_atual) || 0,
+    alerta_estoque_minimo: Number(data.alerta_estoque_minimo) || 5,
+    categoria: data.categoria || null,
+    sku: data.sku || null,
+    foto_url: data.foto_url || null,
+    validade: data.validade || null,
+    codigo_barras: data.codigo_barras ? normalizeBarcode(data.codigo_barras) : null,
+    unidade: data.unidade || "UN",
+    marca: data.marca || null,
+    ncm: data.ncm || null,
+    fornecedor: data.fornecedor || null,
+    descricao: data.descricao || null,
+    ativo: data.ativo,
+  });
+
+  const saveBatches = async (productId: string, lotes: ProductFormData["lotes"]) => {
+    await supabase.from("product_batches").delete().eq("product_id", productId);
+    const valid = lotes.filter((l) => l.lote || l.validade || Number(l.quantidade) > 0);
+    if (!valid.length) return;
+    const { error } = await supabase.from("product_batches").insert(
+      valid.map((l) => ({
+        product_id: productId,
+        user_id: user!.id,
+        lote: l.lote || null,
+        validade: l.validade || null,
+        quantidade: Number(l.quantidade) || 0,
+        custo_unitario: Number(l.custo_unitario) || 0,
+      })),
+    );
+    if (error) throw error;
+  };
+
   const createMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("products").insert({
-        nome: form.nome,
-        custo_unitario: Number(form.custo_unitario),
-        preco_padrao: Number(form.preco_padrao),
-        estoque_atual: Number(form.estoque_atual) || 0,
-        alerta_estoque_minimo: Number(form.alerta_estoque_minimo) || 5,
-        categoria: form.categoria || null,
-        sku: form.sku || null,
-        foto_url: form.foto_url || null,
-        validade: form.validade || null,
-
-        user_id: user!.id,
-      });
+      const { data, error } = await supabase
+        .from("products")
+        .insert({ ...productPayload(form), user_id: user!.id })
+        .select("id")
+        .single();
       if (error) throw error;
+      await saveBatches(data.id, form.lotes);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({ title: "Produto criado com sucesso!" });
       setOpen(false);
-      setForm(emptyForm);
+      setForm(emptyProductForm());
     },
-    onError: () => toast({ title: "Erro ao criar produto", variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Erro ao criar produto", description: e?.message, variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const { error } = await supabase.from("products").update({
-        nome: data.nome,
-        custo_unitario: Number(data.custo_unitario),
-        preco_padrao: Number(data.preco_padrao),
-        estoque_atual: Number(data.estoque_atual),
-        alerta_estoque_minimo: Number(data.alerta_estoque_minimo),
-        categoria: data.categoria || null,
-        sku: data.sku || null,
-        foto_url: data.foto_url || null,
-        validade: data.validade || null,
-
-      }).eq("id", data.id);
+    mutationFn: async (data: ProductFormData) => {
+      const { error } = await supabase.from("products").update(productPayload(data)).eq("id", data.id!);
       if (error) throw error;
+      await saveBatches(data.id!, data.lotes);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({ title: "Produto atualizado!" });
       setEditingProduct(null);
     },
-    onError: () => toast({ title: "Erro ao atualizar produto", variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Erro ao atualizar produto", description: e?.message, variant: "destructive" }),
   });
+
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
