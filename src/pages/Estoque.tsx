@@ -300,9 +300,6 @@ export default function Estoque() {
               <ProductForm data={form} setData={setForm} onSave={() => createMutation.mutate()} isPending={createMutation.isPending} buttonLabel="Criar Produto" duplicateBarcodeName={duplicateFor(form)} />
             </DialogContent>
           </Dialog>
-
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
