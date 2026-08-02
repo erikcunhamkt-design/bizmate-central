@@ -178,13 +178,77 @@ export default function Estoque() {
   const avgMargem = products.length > 0 ? products.reduce((acc, p) => acc + calcMargem(p.custo_unitario, p.preco_padrao), 0) / products.length : 0;
 
 
-  const openEdit = (p: any) => {
+  const openEdit = async (p: any) => {
     setEditingProduct({
-      id: p.id, nome: p.nome, custo_unitario: String(p.custo_unitario), preco_padrao: String(p.preco_padrao),
-      estoque_atual: String(p.estoque_atual), alerta_estoque_minimo: String(p.alerta_estoque_minimo),
-      categoria: p.categoria || "", sku: p.sku || "", foto_url: p.foto_url || "", validade: p.validade || "",
+      ...emptyProductForm(),
+      id: p.id,
+      nome: p.nome,
+      custo_unitario: String(p.custo_unitario),
+      preco_padrao: String(p.preco_padrao),
+      preco_minimo: p.preco_minimo != null ? String(p.preco_minimo) : "",
+      estoque_atual: String(p.estoque_atual),
+      alerta_estoque_minimo: String(p.alerta_estoque_minimo),
+      categoria: p.categoria || "",
+      sku: p.sku || "",
+      foto_url: p.foto_url || "",
+      validade: p.validade || "",
+      codigo_barras: p.codigo_barras || "",
+      unidade: p.unidade || "UN",
+      marca: p.marca || "",
+      ncm: p.ncm || "",
+      fornecedor: p.fornecedor || "",
+      descricao: p.descricao || "",
+      ativo: p.ativo ?? true,
+      lotes: [],
     });
+
+    const { data: batches } = await supabase
+      .from("product_batches")
+      .select("*")
+      .eq("product_id", p.id)
+      .order("validade", { nullsFirst: false });
+
+    if (batches?.length) {
+      setEditingProduct((prev) =>
+        prev && prev.id === p.id
+          ? {
+              ...prev,
+              lotes: batches.map((b) => ({
+                id: b.id,
+                lote: b.lote || "",
+                validade: b.validade || "",
+                quantidade: String(b.quantidade),
+                custo_unitario: String(b.custo_unitario),
+              })),
+            }
+          : prev,
+      );
+    }
   };
+
+  /** Fluxo de bipagem: encontra pelo código ou oferece cadastrar um novo produto */
+  const handleScan = (raw: string) => {
+    const code = normalizeBarcode(raw);
+    if (!code) return;
+    const found = products.find((p) => (p as any).codigo_barras === code);
+    setScanCode("");
+    if (found) {
+      setNotFoundCode(null);
+      openEdit(found);
+      toast({ title: `Produto encontrado: ${found.nome}` });
+    } else {
+      setNotFoundCode(code);
+    }
+  };
+
+  const duplicateFor = (data: ProductFormData | null) => {
+    if (!data?.codigo_barras) return null;
+    const code = normalizeBarcode(data.codigo_barras);
+    const dup = products.find((p) => (p as any).codigo_barras === code && p.id !== data.id);
+    return dup?.nome || null;
+  };
+
+
 
   const stats = [
     { label: "Produtos", value: products.length, icon: PackageIcon, color: "text-primary" },
