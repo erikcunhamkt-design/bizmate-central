@@ -11,16 +11,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/lib/currency";
-import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2, TrendingUp, TrendingDown, BarChart3, Archive, FileDown, FileSpreadsheet, History, CalendarClock } from "lucide-react";
+import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2, TrendingUp, TrendingDown, BarChart3, Archive, FileDown, FileSpreadsheet, History, CalendarClock, FileUp, ScanBarcode } from "lucide-react";
 import { motion } from "framer-motion";
 import { PaginationControls } from "@/components/PaginationControls";
-import { ProductForm } from "@/components/ProductForm";
+import { ProductForm, emptyProductForm, type ProductFormData } from "@/components/ProductForm";
+import { BarcodeInput } from "@/components/BarcodeInput";
+import { ProductImportDialog } from "@/components/ProductImportDialog";
 import { StockMovementHistory } from "@/components/StockMovementHistory";
 import { exportEstoqueCSV, exportEstoquePDF } from "@/lib/exportEstoque";
+import { normalizeBarcode } from "@/lib/barcode";
 
 const PAGE_SIZE = 15;
 
-const emptyForm = { nome: "", custo_unitario: "", preco_padrao: "", estoque_atual: "", alerta_estoque_minimo: "5", categoria: "", sku: "", foto_url: "", validade: "" };
 
 const EXPIRY_ALERT_DAYS = 30;
 
