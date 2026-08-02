@@ -281,6 +281,9 @@ export default function Estoque() {
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => exportEstoqueCSV(filtered)}>
             <FileSpreadsheet className="h-3.5 w-3.5" />Excel
           </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportOpen(true)}>
+            <FileUp className="h-3.5 w-3.5" />Importar
+          </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-2 gradient-primary shadow-glow"><Plus className="h-4 w-4" />Novo Produto</Button>
@@ -294,7 +297,10 @@ export default function Estoque() {
                   Novo Produto
                 </DialogTitle>
               </DialogHeader>
-              <ProductForm data={form} setData={setForm} onSave={() => createMutation.mutate()} isPending={createMutation.isPending} buttonLabel="Criar Produto" />
+              <ProductForm data={form} setData={setForm} onSave={() => createMutation.mutate()} isPending={createMutation.isPending} buttonLabel="Criar Produto" duplicateBarcodeName={duplicateFor(form)} />
+            </DialogContent>
+          </Dialog>
+
             </DialogContent>
           </Dialog>
         </div>
