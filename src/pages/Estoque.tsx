@@ -413,10 +413,12 @@ export default function Estoque() {
                             )}
                             <div className="min-w-0">
                               <p className="font-semibold text-sm truncate">{p.nome}</p>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 {p.categoria && <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{p.categoria}</span>}
                                 {p.sku && <span className="text-[11px] text-muted-foreground">SKU: {p.sku}</span>}
+                                {(p as any).codigo_barras && <span className="text-[11px] text-muted-foreground font-mono">{(p as any).codigo_barras}</span>}
                               </div>
+
                             </div>
                           </div>
                         </TableCell>
