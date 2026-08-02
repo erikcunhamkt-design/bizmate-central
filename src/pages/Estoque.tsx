@@ -11,16 +11,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/lib/currency";
-import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2, TrendingUp, TrendingDown, BarChart3, Archive, FileDown, FileSpreadsheet, History, CalendarClock } from "lucide-react";
+import { Plus, Search, AlertTriangle, Package as PackageIcon, Pencil, Trash2, TrendingUp, TrendingDown, BarChart3, Archive, FileDown, FileSpreadsheet, History, CalendarClock, FileUp, ScanBarcode } from "lucide-react";
 import { motion } from "framer-motion";
 import { PaginationControls } from "@/components/PaginationControls";
-import { ProductForm } from "@/components/ProductForm";
+import { ProductForm, emptyProductForm, type ProductFormData } from "@/components/ProductForm";
+import { BarcodeInput } from "@/components/BarcodeInput";
+import { ProductImportDialog } from "@/components/ProductImportDialog";
 import { StockMovementHistory } from "@/components/StockMovementHistory";
 import { exportEstoqueCSV, exportEstoquePDF } from "@/lib/exportEstoque";
+import { normalizeBarcode } from "@/lib/barcode";
 
 const PAGE_SIZE = 15;
 
-const emptyForm = { nome: "", custo_unitario: "", preco_padrao: "", estoque_atual: "", alerta_estoque_minimo: "5", categoria: "", sku: "", foto_url: "", validade: "" };
 
 const EXPIRY_ALERT_DAYS = 30;
 
@@ -42,11 +44,14 @@ export default function Estoque() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [scanCode, setScanCode] = useState("");
+  const [notFoundCode, setNotFoundCode] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("todos");
   const [stockFilter, setStockFilter] = useState("todos");
-  const [form, setForm] = useState(emptyForm);
-  const [editingProduct, setEditingProduct] = useState<any | null>(null);
+  const [form, setForm] = useState<ProductFormData>(emptyProductForm());
+  const [editingProduct, setEditingProduct] = useState<ProductFormData | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
@@ -60,55 +65,76 @@ export default function Estoque() {
     enabled: !!user,
   });
 
+  const productPayload = (data: ProductFormData) => ({
+    nome: data.nome,
+    custo_unitario: Number(data.custo_unitario) || 0,
+    preco_padrao: Number(data.preco_padrao) || 0,
+    preco_minimo: data.preco_minimo ? Number(data.preco_minimo) : null,
+    estoque_atual: Number(data.estoque_atual) || 0,
+    alerta_estoque_minimo: Number(data.alerta_estoque_minimo) || 5,
+    categoria: data.categoria || null,
+    sku: data.sku || null,
+    foto_url: data.foto_url || null,
+    validade: data.validade || null,
+    codigo_barras: data.codigo_barras ? normalizeBarcode(data.codigo_barras) : null,
+    unidade: data.unidade || "UN",
+    marca: data.marca || null,
+    ncm: data.ncm || null,
+    fornecedor: data.fornecedor || null,
+    descricao: data.descricao || null,
+    ativo: data.ativo,
+  });
+
+  const saveBatches = async (productId: string, lotes: ProductFormData["lotes"]) => {
+    await supabase.from("product_batches").delete().eq("product_id", productId);
+    const valid = lotes.filter((l) => l.lote || l.validade || Number(l.quantidade) > 0);
+    if (!valid.length) return;
+    const { error } = await supabase.from("product_batches").insert(
+      valid.map((l) => ({
+        product_id: productId,
+        user_id: user!.id,
+        lote: l.lote || null,
+        validade: l.validade || null,
+        quantidade: Number(l.quantidade) || 0,
+        custo_unitario: Number(l.custo_unitario) || 0,
+      })),
+    );
+    if (error) throw error;
+  };
+
   const createMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("products").insert({
-        nome: form.nome,
-        custo_unitario: Number(form.custo_unitario),
-        preco_padrao: Number(form.preco_padrao),
-        estoque_atual: Number(form.estoque_atual) || 0,
-        alerta_estoque_minimo: Number(form.alerta_estoque_minimo) || 5,
-        categoria: form.categoria || null,
-        sku: form.sku || null,
-        foto_url: form.foto_url || null,
-        validade: form.validade || null,
-
-        user_id: user!.id,
-      });
+      const { data, error } = await supabase
+        .from("products")
+        .insert({ ...productPayload(form), user_id: user!.id })
+        .select("id")
+        .single();
       if (error) throw error;
+      await saveBatches(data.id, form.lotes);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({ title: "Produto criado com sucesso!" });
       setOpen(false);
-      setForm(emptyForm);
+      setForm(emptyProductForm());
     },
-    onError: () => toast({ title: "Erro ao criar produto", variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Erro ao criar produto", description: e?.message, variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const { error } = await supabase.from("products").update({
-        nome: data.nome,
-        custo_unitario: Number(data.custo_unitario),
-        preco_padrao: Number(data.preco_padrao),
-        estoque_atual: Number(data.estoque_atual),
-        alerta_estoque_minimo: Number(data.alerta_estoque_minimo),
-        categoria: data.categoria || null,
-        sku: data.sku || null,
-        foto_url: data.foto_url || null,
-        validade: data.validade || null,
-
-      }).eq("id", data.id);
+    mutationFn: async (data: ProductFormData) => {
+      const { error } = await supabase.from("products").update(productPayload(data)).eq("id", data.id!);
       if (error) throw error;
+      await saveBatches(data.id!, data.lotes);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({ title: "Produto atualizado!" });
       setEditingProduct(null);
     },
-    onError: () => toast({ title: "Erro ao atualizar produto", variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Erro ao atualizar produto", description: e?.message, variant: "destructive" }),
   });
+
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -126,7 +152,9 @@ export default function Estoque() {
   const categories = [...new Set(products.map(p => p.categoria).filter(Boolean))] as string[];
 
   const filtered = products.filter(p => {
-    const matchSearch = p.nome.toLowerCase().includes(search.toLowerCase()) || p.categoria?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase());
+    const term = search.toLowerCase();
+    const matchSearch = p.nome.toLowerCase().includes(term) || p.categoria?.toLowerCase().includes(term) || p.sku?.toLowerCase().includes(term) || (p as any).codigo_barras?.includes(term) || (p as any).marca?.toLowerCase().includes(term);
+
     const matchCategory = categoryFilter === "todos" || p.categoria === categoryFilter;
     const exp = getExpiryInfo((p as any).validade);
     const matchStock = stockFilter === "todos" ? true :
@@ -150,13 +178,77 @@ export default function Estoque() {
   const avgMargem = products.length > 0 ? products.reduce((acc, p) => acc + calcMargem(p.custo_unitario, p.preco_padrao), 0) / products.length : 0;
 
 
-  const openEdit = (p: any) => {
+  const openEdit = async (p: any) => {
     setEditingProduct({
-      id: p.id, nome: p.nome, custo_unitario: String(p.custo_unitario), preco_padrao: String(p.preco_padrao),
-      estoque_atual: String(p.estoque_atual), alerta_estoque_minimo: String(p.alerta_estoque_minimo),
-      categoria: p.categoria || "", sku: p.sku || "", foto_url: p.foto_url || "", validade: p.validade || "",
+      ...emptyProductForm(),
+      id: p.id,
+      nome: p.nome,
+      custo_unitario: String(p.custo_unitario),
+      preco_padrao: String(p.preco_padrao),
+      preco_minimo: p.preco_minimo != null ? String(p.preco_minimo) : "",
+      estoque_atual: String(p.estoque_atual),
+      alerta_estoque_minimo: String(p.alerta_estoque_minimo),
+      categoria: p.categoria || "",
+      sku: p.sku || "",
+      foto_url: p.foto_url || "",
+      validade: p.validade || "",
+      codigo_barras: p.codigo_barras || "",
+      unidade: p.unidade || "UN",
+      marca: p.marca || "",
+      ncm: p.ncm || "",
+      fornecedor: p.fornecedor || "",
+      descricao: p.descricao || "",
+      ativo: p.ativo ?? true,
+      lotes: [],
     });
+
+    const { data: batches } = await supabase
+      .from("product_batches")
+      .select("*")
+      .eq("product_id", p.id)
+      .order("validade", { nullsFirst: false });
+
+    if (batches?.length) {
+      setEditingProduct((prev) =>
+        prev && prev.id === p.id
+          ? {
+              ...prev,
+              lotes: batches.map((b) => ({
+                id: b.id,
+                lote: b.lote || "",
+                validade: b.validade || "",
+                quantidade: String(b.quantidade),
+                custo_unitario: String(b.custo_unitario),
+              })),
+            }
+          : prev,
+      );
+    }
   };
+
+  /** Fluxo de bipagem: encontra pelo código ou oferece cadastrar um novo produto */
+  const handleScan = (raw: string) => {
+    const code = normalizeBarcode(raw);
+    if (!code) return;
+    const found = products.find((p) => (p as any).codigo_barras === code);
+    setScanCode("");
+    if (found) {
+      setNotFoundCode(null);
+      openEdit(found);
+      toast({ title: `Produto encontrado: ${found.nome}` });
+    } else {
+      setNotFoundCode(code);
+    }
+  };
+
+  const duplicateFor = (data: ProductFormData | null) => {
+    if (!data?.codigo_barras) return null;
+    const code = normalizeBarcode(data.codigo_barras);
+    const dup = products.find((p) => (p as any).codigo_barras === code && p.id !== data.id);
+    return dup?.nome || null;
+  };
+
+
 
   const stats = [
     { label: "Produtos", value: products.length, icon: PackageIcon, color: "text-primary" },
@@ -189,6 +281,9 @@ export default function Estoque() {
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => exportEstoqueCSV(filtered)}>
             <FileSpreadsheet className="h-3.5 w-3.5" />Excel
           </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportOpen(true)}>
+            <FileUp className="h-3.5 w-3.5" />Importar
+          </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-2 gradient-primary shadow-glow"><Plus className="h-4 w-4" />Novo Produto</Button>
@@ -202,7 +297,7 @@ export default function Estoque() {
                   Novo Produto
                 </DialogTitle>
               </DialogHeader>
-              <ProductForm data={form} setData={setForm} onSave={() => createMutation.mutate()} isPending={createMutation.isPending} buttonLabel="Criar Produto" />
+              <ProductForm data={form} setData={setForm} onSave={() => createMutation.mutate()} isPending={createMutation.isPending} buttonLabel="Criar Produto" duplicateBarcodeName={duplicateFor(form)} />
             </DialogContent>
           </Dialog>
         </div>
@@ -233,12 +328,29 @@ export default function Estoque() {
         </TabsList>
 
         <TabsContent value="produtos" className="space-y-4 mt-4">
+          {/* Bipagem rápida */}
+          <Card className="border-border/50">
+            <CardContent className="p-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-2 text-sm font-semibold shrink-0">
+                <ScanBarcode className="h-4 w-4 text-primary" />
+                Bipar produto
+              </div>
+              <div className="flex-1 min-w-[220px] max-w-md">
+                <BarcodeInput value={scanCode} onChange={setScanCode} onScan={handleScan} placeholder="Bipe o código para localizar ou cadastrar" />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Funciona com leitor USB/Bluetooth ou pela câmera.
+              </p>
+            </CardContent>
+          </Card>
+
           {/* Filters */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 min-w-[200px] max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar por nome, categoria ou SKU..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9 h-10 bg-card border-border/50" />
+              <Input placeholder="Buscar por nome, categoria, SKU ou código..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9 h-10 bg-card border-border/50" />
             </div>
+
             {categories.length > 0 && (
               <Select value={categoryFilter} onValueChange={v => { setCategoryFilter(v); setPage(1); }}>
                 <SelectTrigger className="w-40 h-10 bg-card border-border/50"><SelectValue placeholder="Categoria" /></SelectTrigger>
@@ -301,10 +413,12 @@ export default function Estoque() {
                             )}
                             <div className="min-w-0">
                               <p className="font-semibold text-sm truncate">{p.nome}</p>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 {p.categoria && <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{p.categoria}</span>}
                                 {p.sku && <span className="text-[11px] text-muted-foreground">SKU: {p.sku}</span>}
+                                {(p as any).codigo_barras && <span className="text-[11px] text-muted-foreground font-mono">{(p as any).codigo_barras}</span>}
                               </div>
+
                             </div>
                           </div>
                         </TableCell>
@@ -372,7 +486,7 @@ export default function Estoque() {
             </DialogTitle>
           </DialogHeader>
           {editingProduct && (
-            <ProductForm data={editingProduct} setData={setEditingProduct} onSave={() => updateMutation.mutate(editingProduct)} isPending={updateMutation.isPending} buttonLabel="Salvar Alterações" />
+            <ProductForm data={editingProduct} setData={setEditingProduct as any} onSave={() => updateMutation.mutate(editingProduct)} isPending={updateMutation.isPending} buttonLabel="Salvar Alterações" duplicateBarcodeName={duplicateFor(editingProduct)} />
           )}
         </DialogContent>
       </Dialog>
@@ -390,6 +504,32 @@ export default function Estoque() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Código não encontrado → cadastrar novo */}
+      <Dialog open={!!notFoundCode} onOpenChange={(v) => { if (!v) setNotFoundCode(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Código não cadastrado</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Nenhum produto encontrado com o código <span className="font-mono font-semibold text-foreground">{notFoundCode}</span>. Deseja cadastrar um novo produto com este código?
+          </p>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setNotFoundCode(null)}>Cancelar</Button>
+            <Button
+              className="gradient-primary font-semibold"
+              onClick={() => {
+                setForm({ ...emptyProductForm(), codigo_barras: notFoundCode || "" });
+                setNotFoundCode(null);
+                setOpen(true);
+              }}
+            >
+              Criar produto
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <ProductImportDialog open={importOpen} onOpenChange={setImportOpen} existingProducts={products} />
     </motion.div>
   );
+
 }

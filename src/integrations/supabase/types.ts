@@ -355,54 +355,122 @@ export type Database = {
           },
         ]
       }
+      product_batches: {
+        Row: {
+          created_at: string
+          custo_unitario: number
+          id: string
+          lote: string | null
+          observacoes: string | null
+          product_id: string
+          quantidade: number
+          updated_at: string
+          user_id: string
+          validade: string | null
+        }
+        Insert: {
+          created_at?: string
+          custo_unitario?: number
+          id?: string
+          lote?: string | null
+          observacoes?: string | null
+          product_id: string
+          quantidade?: number
+          updated_at?: string
+          user_id: string
+          validade?: string | null
+        }
+        Update: {
+          created_at?: string
+          custo_unitario?: number
+          id?: string
+          lote?: string | null
+          observacoes?: string | null
+          product_id?: string
+          quantidade?: number
+          updated_at?: string
+          user_id?: string
+          validade?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_batches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           alerta_estoque_minimo: number
+          ativo: boolean
           categoria: string | null
+          codigo_barras: string | null
           created_at: string
           custo_unitario: number
+          descricao: string | null
           estoque_atual: number
+          fornecedor: string | null
           foto_url: string | null
           id: string
+          marca: string | null
           margem_alvo_percent: number | null
+          ncm: string | null
           nome: string
           preco_minimo: number | null
           preco_padrao: number
           sku: string | null
+          unidade: string
           updated_at: string
           user_id: string
           validade: string | null
         }
         Insert: {
           alerta_estoque_minimo?: number
+          ativo?: boolean
           categoria?: string | null
+          codigo_barras?: string | null
           created_at?: string
           custo_unitario?: number
+          descricao?: string | null
           estoque_atual?: number
+          fornecedor?: string | null
           foto_url?: string | null
           id?: string
+          marca?: string | null
           margem_alvo_percent?: number | null
+          ncm?: string | null
           nome: string
           preco_minimo?: number | null
           preco_padrao?: number
           sku?: string | null
+          unidade?: string
           updated_at?: string
           user_id: string
           validade?: string | null
         }
         Update: {
           alerta_estoque_minimo?: number
+          ativo?: boolean
           categoria?: string | null
+          codigo_barras?: string | null
           created_at?: string
           custo_unitario?: number
+          descricao?: string | null
           estoque_atual?: number
+          fornecedor?: string | null
           foto_url?: string | null
           id?: string
+          marca?: string | null
           margem_alvo_percent?: number | null
+          ncm?: string | null
           nome?: string
           preco_minimo?: number | null
           preco_padrao?: number
           sku?: string | null
+          unidade?: string
           updated_at?: string
           user_id?: string
           validade?: string | null
