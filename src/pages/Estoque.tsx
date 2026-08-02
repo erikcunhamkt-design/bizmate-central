@@ -328,12 +328,29 @@ export default function Estoque() {
         </TabsList>
 
         <TabsContent value="produtos" className="space-y-4 mt-4">
+          {/* Bipagem rápida */}
+          <Card className="border-border/50">
+            <CardContent className="p-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-2 text-sm font-semibold shrink-0">
+                <ScanBarcode className="h-4 w-4 text-primary" />
+                Bipar produto
+              </div>
+              <div className="flex-1 min-w-[220px] max-w-md">
+                <BarcodeInput value={scanCode} onChange={setScanCode} onScan={handleScan} placeholder="Bipe o código para localizar ou cadastrar" />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Funciona com leitor USB/Bluetooth ou pela câmera.
+              </p>
+            </CardContent>
+          </Card>
+
           {/* Filters */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 min-w-[200px] max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar por nome, categoria ou SKU..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9 h-10 bg-card border-border/50" />
+              <Input placeholder="Buscar por nome, categoria, SKU ou código..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9 h-10 bg-card border-border/50" />
             </div>
+
             {categories.length > 0 && (
               <Select value={categoryFilter} onValueChange={v => { setCategoryFilter(v); setPage(1); }}>
                 <SelectTrigger className="w-40 h-10 bg-card border-border/50"><SelectValue placeholder="Categoria" /></SelectTrigger>
