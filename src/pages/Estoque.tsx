@@ -152,7 +152,9 @@ export default function Estoque() {
   const categories = [...new Set(products.map(p => p.categoria).filter(Boolean))] as string[];
 
   const filtered = products.filter(p => {
-    const matchSearch = p.nome.toLowerCase().includes(search.toLowerCase()) || p.categoria?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase());
+    const term = search.toLowerCase();
+    const matchSearch = p.nome.toLowerCase().includes(term) || p.categoria?.toLowerCase().includes(term) || p.sku?.toLowerCase().includes(term) || (p as any).codigo_barras?.includes(term) || (p as any).marca?.toLowerCase().includes(term);
+
     const matchCategory = categoryFilter === "todos" || p.categoria === categoryFilter;
     const exp = getExpiryInfo((p as any).validade);
     const matchStock = stockFilter === "todos" ? true :
