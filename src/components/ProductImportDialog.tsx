@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/lib/currency";
 import { parseNFeXml } from "@/lib/nfeXml";
 import { downloadCsvTemplate, parseProductsCsv, type ImportRow } from "@/lib/productImport";
-import { generateSku } from "@/lib/barcode";
+import { nextSequentialSku } from "@/lib/barcode";
 import { Download, FileUp, Trash2, Upload, AlertTriangle } from "lucide-react";
 
 interface ProductImportDialogProps {
@@ -65,13 +65,14 @@ export function ProductImportDialog({ open, onOpenChange, existingProducts }: Pr
     mutationFn: async () => {
       let created = 0;
       let updated = 0;
+      const skus: string[] = existingProducts.map((p: any) => p.sku);
 
       for (const row of rows) {
         const existing = row.codigo_barras ? byBarcode.get(row.codigo_barras) : null;
         const payload = {
           nome: row.nome,
           codigo_barras: row.codigo_barras || null,
-          sku: row.sku || generateSku(row.nome, row.categoria),
+          sku: row.sku || nextSequentialSku(skus),
           categoria: row.categoria || null,
           marca: row.marca || null,
           unidade: row.unidade || "UN",
@@ -83,6 +84,8 @@ export function ProductImportDialog({ open, onOpenChange, existingProducts }: Pr
           alerta_estoque_minimo: row.alerta_estoque_minimo || 5,
           validade: row.validade || null,
         };
+
+        if (!row.sku) skus.push(payload.sku);
 
         if (existing) {
           const { error } = await supabase
