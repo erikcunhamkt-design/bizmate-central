@@ -254,8 +254,19 @@ export default function Vendas() {
         const { error: itemsErr } = await supabase.from("sale_items").insert(items);
         if (itemsErr) throw itemsErr;
 
+        const clienteNome = customers.find((cu) => cu.id === selectedCustomer)?.nome || "Cliente";
         for (const c of cart) {
-          await supabase.from("products").update({ estoque_atual: c.estoque_atual - c.quantidade }).eq("id", c.product_id);
+          const posterior = c.estoque_atual - c.quantidade;
+          await supabase.from("products").update({ estoque_atual: posterior }).eq("id", c.product_id);
+          await supabase.from("stock_movements").insert({
+            user_id: user!.id,
+            product_id: c.product_id,
+            tipo: "saida",
+            quantidade: c.quantidade,
+            estoque_anterior: c.estoque_atual,
+            estoque_posterior: posterior,
+            motivo: `Venda ${parcelado ? "parcelada" : "à vista"} — ${clienteNome}`,
+          });
         }
       }
 
@@ -291,6 +302,8 @@ export default function Vendas() {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["installments"] });
       queryClient.invalidateQueries({ queryKey: ["products-list"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["stock_movements"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["monthly-sales"] });
       queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
@@ -379,6 +392,15 @@ export default function Vendas() {
         const product = products.find(p => p.id === item.product_id);
         if (product) {
           const { error: stockErr } = await supabase.from("products").update({ estoque_atual: product.estoque_atual + item.quantidade }).eq("id", item.product_id);
+          await supabase.from("stock_movements").insert({
+            user_id: user!.id,
+            product_id: item.product_id,
+            tipo: "entrada",
+            quantidade: item.quantidade,
+            estoque_anterior: product.estoque_atual,
+            estoque_posterior: product.estoque_atual + item.quantidade,
+            motivo: `Estorno de venda excluída — ${(sale as any)?.customers?.nome ?? "Cliente"}`,
+          });
           if (stockErr) throw stockErr;
         }
       }
@@ -393,6 +415,8 @@ export default function Vendas() {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["installments"] });
       queryClient.invalidateQueries({ queryKey: ["products-list"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["stock_movements"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["monthly-sales"] });
       queryClient.invalidateQueries({ queryKey: ["revenue-goals-cash-history"] });
