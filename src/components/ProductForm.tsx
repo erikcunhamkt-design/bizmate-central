@@ -7,9 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProductPhotoUpload } from "@/components/ProductPhotoUpload";
 import { BarcodeInput } from "@/components/BarcodeInput";
-import { generateSku } from "@/lib/barcode";
 import { UNIDADES } from "@/lib/productImport";
-import { AlertTriangle, CalendarClock, Plus, Sparkles, Tag, Trash2, Wallet, Boxes } from "lucide-react";
+import { AlertTriangle, CalendarClock, Plus, Tag, Trash2, Wallet, Boxes } from "lucide-react";
 
 export interface BatchDraft {
   id?: string;
@@ -70,9 +69,11 @@ interface ProductFormProps {
   buttonLabel: string;
   /** Usado para avisar sobre código de barras já cadastrado */
   duplicateBarcodeName?: string | null;
+  /** SKU sequencial que será atribuído automaticamente ao salvar */
+  autoSkuPreview?: string;
 }
 
-export function ProductForm({ data, setData, onSave, isPending, buttonLabel, duplicateBarcodeName }: ProductFormProps) {
+export function ProductForm({ data, setData, onSave, isPending, buttonLabel, duplicateBarcodeName, autoSkuPreview }: ProductFormProps) {
   const custo = Number(data.custo_unitario) || 0;
   const preco = Number(data.preco_padrao) || 0;
   const margem = preco > 0 ? ((preco - custo) / preco) * 100 : 0;
