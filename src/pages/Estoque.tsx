@@ -19,7 +19,7 @@ import { BarcodeInput } from "@/components/BarcodeInput";
 import { ProductImportDialog } from "@/components/ProductImportDialog";
 import { StockMovementHistory } from "@/components/StockMovementHistory";
 import { exportEstoqueCSV, exportEstoquePDF } from "@/lib/exportEstoque";
-import { normalizeBarcode } from "@/lib/barcode";
+import { normalizeBarcode, nextSequentialSku } from "@/lib/barcode";
 
 const PAGE_SIZE = 15;
 
@@ -104,9 +104,14 @@ export default function Estoque() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      const code = form.codigo_barras ? normalizeBarcode(form.codigo_barras) : null;
+      if (code) {
+        const dup = products.find((p: any) => p.codigo_barras === code);
+        if (dup) throw new Error(`Este código de barras já está cadastrado no sistema para "${dup.nome}".`);
+      }
       const { data, error } = await supabase
         .from("products")
-        .insert({ ...productPayload(form), user_id: user!.id })
+        .insert({ ...productPayload(form), sku: form.sku || autoSku, user_id: user!.id })
         .select("id")
         .single();
       if (error) throw error;
@@ -123,7 +128,12 @@ export default function Estoque() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: ProductFormData) => {
-      const { error } = await supabase.from("products").update(productPayload(data)).eq("id", data.id!);
+      const code = data.codigo_barras ? normalizeBarcode(data.codigo_barras) : null;
+      if (code) {
+        const dup = products.find((p: any) => p.codigo_barras === code && p.id !== data.id);
+        if (dup) throw new Error(`Este código de barras já está cadastrado no sistema para "${dup.nome}".`);
+      }
+      const { error } = await supabase.from("products").update({ ...productPayload(data), sku: data.sku || autoSku }).eq("id", data.id!);
       if (error) throw error;
       await saveBatches(data.id!, data.lotes);
     },
@@ -148,6 +158,8 @@ export default function Estoque() {
     },
     onError: () => toast({ title: "Erro ao excluir. Verifique se não há vendas vinculadas.", variant: "destructive" }),
   });
+
+  const autoSku = nextSequentialSku(products.map((p: any) => p.sku));
 
   const categories = [...new Set(products.map(p => p.categoria).filter(Boolean))] as string[];
 
@@ -297,7 +309,7 @@ export default function Estoque() {
                   Novo Produto
                 </DialogTitle>
               </DialogHeader>
-              <ProductForm data={form} setData={setForm} onSave={() => createMutation.mutate()} isPending={createMutation.isPending} buttonLabel="Criar Produto" duplicateBarcodeName={duplicateFor(form)} />
+              <ProductForm data={form} setData={setForm} onSave={() => createMutation.mutate()} isPending={createMutation.isPending} buttonLabel="Criar Produto" duplicateBarcodeName={duplicateFor(form)} autoSkuPreview={autoSku} />
             </DialogContent>
           </Dialog>
         </div>
@@ -486,7 +498,7 @@ export default function Estoque() {
             </DialogTitle>
           </DialogHeader>
           {editingProduct && (
-            <ProductForm data={editingProduct} setData={setEditingProduct as any} onSave={() => updateMutation.mutate(editingProduct)} isPending={updateMutation.isPending} buttonLabel="Salvar Alterações" duplicateBarcodeName={duplicateFor(editingProduct)} />
+            <ProductForm data={editingProduct} setData={setEditingProduct as any} onSave={() => updateMutation.mutate(editingProduct)} isPending={updateMutation.isPending} buttonLabel="Salvar Alterações" duplicateBarcodeName={duplicateFor(editingProduct)} autoSkuPreview={autoSku} />
           )}
         </DialogContent>
       </Dialog>
