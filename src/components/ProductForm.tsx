@@ -122,14 +122,17 @@ export function ProductForm({ data, setData, onSave, isPending, buttonLabel, dup
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">SKU</Label>
-              <div className="flex gap-2">
-                <Input value={data.sku} onChange={(e) => set("sku", e.target.value)} placeholder="Ex: CAM-001" className="h-10" />
-                <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" title="Gerar SKU" onClick={() => set("sku", generateSku(data.nome, data.categoria))}>
-                  <Sparkles className="h-4 w-4" />
-                </Button>
-              </div>
+              <Label className="text-xs font-medium text-muted-foreground">SKU (automático)</Label>
+              <Input
+                value={data.sku || autoSkuPreview || ""}
+                readOnly
+                disabled
+                placeholder="Gerado pelo sistema"
+                className="h-10 font-mono"
+              />
+              <p className="text-[11px] text-muted-foreground">O sistema numera em sequência (01, 02, 03...).</p>
             </div>
+
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">Unidade</Label>
               <Select value={data.unidade || "UN"} onValueChange={(v) => set("unidade", v)}>
