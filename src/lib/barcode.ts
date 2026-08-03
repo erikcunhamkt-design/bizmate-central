@@ -70,3 +70,18 @@ export function beep(ok = true) {
 export function isCameraScanSupported() {
   return typeof window !== "undefined" && "BarcodeDetector" in window && !!navigator.mediaDevices?.getUserMedia;
 }
+
+/**
+ * Gera o próximo SKU sequencial (01, 02, 03...) com base nos SKUs já cadastrados.
+ * Considera apenas SKUs puramente numéricos para manter a ordem contínua.
+ */
+export function nextSequentialSku(existingSkus: (string | null | undefined)[]) {
+  let max = 0;
+  for (const sku of existingSkus) {
+    const value = (sku || "").trim();
+    if (!/^\d+$/.test(value)) continue;
+    max = Math.max(max, parseInt(value, 10));
+  }
+  const next = max + 1;
+  return String(next).padStart(2, "0");
+}
