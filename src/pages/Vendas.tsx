@@ -752,7 +752,7 @@ export default function Vendas() {
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Adicionar Produto</Label>
               <div className="flex gap-2">
-                <Select value={addProductId} onValueChange={setAddProductId}>
+                <Select value={addProductId} onValueChange={(v) => { setAddProductId(v); addToCart(v); setAddProductId(""); }}>
                   <SelectTrigger className="flex-1 h-10"><SelectValue placeholder="Selecione um produto" /></SelectTrigger>
                   <SelectContent>{products.filter(p => p.estoque_atual > 0).map(p => <SelectItem key={p.id} value={p.id}>{p.nome} (est: {p.estoque_atual})</SelectItem>)}</SelectContent>
                 </Select>
