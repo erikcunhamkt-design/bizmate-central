@@ -256,17 +256,23 @@ export default function Vendas() {
 
         const clienteNome = customers.find((cu) => cu.id === selectedCustomer)?.nome || "Cliente";
         for (const c of cart) {
-          const posterior = c.estoque_atual - c.quantidade;
-          await supabase.from("products").update({ estoque_atual: posterior }).eq("id", c.product_id);
-          await supabase.from("stock_movements").insert({
+          const { data: prodAtual, error: prodErr } = await supabase
+            .from("products").select("estoque_atual").eq("id", c.product_id).single();
+          if (prodErr) throw new Error(`Erro ao ler estoque de ${c.nome}: ${prodErr.message}`);
+          const anterior = prodAtual?.estoque_atual ?? c.estoque_atual;
+          const posterior = anterior - c.quantidade;
+          const { error: updErr } = await supabase.from("products").update({ estoque_atual: posterior }).eq("id", c.product_id);
+          if (updErr) throw new Error(`Erro ao baixar estoque de ${c.nome}: ${updErr.message}`);
+          const { error: movErr } = await supabase.from("stock_movements").insert({
             user_id: user!.id,
             product_id: c.product_id,
             tipo: "saida",
             quantidade: c.quantidade,
-            estoque_anterior: c.estoque_atual,
+            estoque_anterior: anterior,
             estoque_posterior: posterior,
             motivo: `Venda ${parcelado ? "parcelada" : "à vista"} — ${clienteNome}`,
           });
+          if (movErr) throw new Error(`Erro ao registrar movimentação de ${c.nome}: ${movErr.message}`);
         }
       }
 
@@ -752,7 +758,7 @@ export default function Vendas() {
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Adicionar Produto</Label>
               <div className="flex gap-2">
-                <Select value={addProductId} onValueChange={setAddProductId}>
+                <Select value={addProductId} onValueChange={(v) => { setAddProductId(v); addToCart(v); setAddProductId(""); }}>
                   <SelectTrigger className="flex-1 h-10"><SelectValue placeholder="Selecione um produto" /></SelectTrigger>
                   <SelectContent>{products.filter(p => p.estoque_atual > 0).map(p => <SelectItem key={p.id} value={p.id}>{p.nome} (est: {p.estoque_atual})</SelectItem>)}</SelectContent>
                 </Select>
