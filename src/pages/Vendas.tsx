@@ -235,7 +235,8 @@ export default function Vendas() {
   const createSale = useMutation({
     mutationFn: async () => {
       if (!selectedCustomer) throw new Error("Selecione um cliente");
-      const totalProdutos = cart.length > 0 ? cart.reduce((s, c) => s + c.preco * c.quantidade, 0) : parseFloat(manualTotal) || 0;
+      if (cart.length === 0) throw new Error("Adicione pelo menos um produto à venda para vincular e baixar o estoque");
+      const totalProdutos = cart.reduce((s, c) => s + c.preco * c.quantidade, 0);
       const total = parcelado ? (parseFloat(valorTotalParcelado) || totalProdutos) : totalProdutos;
       if (total <= 0) throw new Error("Informe o valor da venda");
       const today = format(new Date(), "yyyy-MM-dd");
@@ -246,34 +247,33 @@ export default function Vendas() {
       }).select().single();
       if (saleErr) throw saleErr;
 
-      if (cart.length > 0) {
-        const items = cart.map(c => ({
-          sale_id: sale.id, product_id: c.product_id, quantidade: c.quantidade,
-          preco_unitario_vendido: c.preco, custo_unitario_no_momento: c.custo, subtotal: c.preco * c.quantidade,
-        }));
-        const { error: itemsErr } = await supabase.from("sale_items").insert(items);
-        if (itemsErr) throw itemsErr;
+      const items = cart.map(c => ({
+        sale_id: sale.id, product_id: c.product_id, quantidade: c.quantidade,
+        preco_unitario_vendido: c.preco, custo_unitario_no_momento: c.custo, subtotal: c.preco * c.quantidade,
+      }));
+      const { error: itemsErr } = await supabase.from("sale_items").insert(items);
+      if (itemsErr) throw itemsErr;
 
-        const clienteNome = customers.find((cu) => cu.id === selectedCustomer)?.nome || "Cliente";
-        for (const c of cart) {
-          const { data: prodAtual, error: prodErr } = await supabase
-            .from("products").select("estoque_atual").eq("id", c.product_id).single();
-          if (prodErr) throw new Error(`Erro ao ler estoque de ${c.nome}: ${prodErr.message}`);
-          const anterior = prodAtual?.estoque_atual ?? c.estoque_atual;
-          const posterior = anterior - c.quantidade;
-          const { error: updErr } = await supabase.from("products").update({ estoque_atual: posterior }).eq("id", c.product_id);
-          if (updErr) throw new Error(`Erro ao baixar estoque de ${c.nome}: ${updErr.message}`);
-          const { error: movErr } = await supabase.from("stock_movements").insert({
-            user_id: user!.id,
-            product_id: c.product_id,
-            tipo: "saida",
-            quantidade: c.quantidade,
-            estoque_anterior: anterior,
-            estoque_posterior: posterior,
-            motivo: `Venda ${parcelado ? "parcelada" : "à vista"} — ${clienteNome}`,
-          });
-          if (movErr) throw new Error(`Erro ao registrar movimentação de ${c.nome}: ${movErr.message}`);
-        }
+      const clienteNome = customers.find((cu) => cu.id === selectedCustomer)?.nome || "Cliente";
+      for (const c of cart) {
+        const { data: prodAtual, error: prodErr } = await supabase
+          .from("products").select("estoque_atual").eq("id", c.product_id).single();
+        if (prodErr) throw new Error(`Erro ao ler estoque de ${c.nome}: ${prodErr.message}`);
+        const anterior = prodAtual?.estoque_atual ?? c.estoque_atual;
+        if (anterior < c.quantidade) throw new Error(`Estoque insuficiente para ${c.nome}. Disponível: ${anterior}`);
+        const posterior = anterior - c.quantidade;
+        const { error: updErr } = await supabase.from("products").update({ estoque_atual: posterior }).eq("id", c.product_id);
+        if (updErr) throw new Error(`Erro ao baixar estoque de ${c.nome}: ${updErr.message}`);
+        const { error: movErr } = await supabase.from("stock_movements").insert({
+          user_id: user!.id,
+          product_id: c.product_id,
+          tipo: "saida",
+          quantidade: c.quantidade,
+          estoque_anterior: anterior,
+          estoque_posterior: posterior,
+          motivo: `Venda ${parcelado ? "parcelada" : "à vista"} — ${clienteNome}`,
+        });
+        if (movErr) throw new Error(`Erro ao registrar movimentação de ${c.nome}: ${movErr.message}`);
       }
 
       if (parcelado) {
@@ -758,7 +758,7 @@ export default function Vendas() {
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Adicionar Produto</Label>
               <div className="flex gap-2">
-                <Select value={addProductId} onValueChange={(v) => { setAddProductId(v); addToCart(v); setAddProductId(""); }}>
+                <Select value={addProductId} onValueChange={setAddProductId}>
                   <SelectTrigger className="flex-1 h-10"><SelectValue placeholder="Selecione um produto" /></SelectTrigger>
                   <SelectContent>{products.filter(p => p.estoque_atual > 0).map(p => <SelectItem key={p.id} value={p.id}>{p.nome} (est: {p.estoque_atual})</SelectItem>)}</SelectContent>
                 </Select>
@@ -796,10 +796,7 @@ export default function Vendas() {
             )}
 
             {cart.length === 0 && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Valor da Venda (R$)</Label>
-                <Input type="number" min={0} step="0.01" placeholder="0,00" value={manualTotal} onChange={e => setManualTotal(e.target.value)} className="h-10" />
-              </div>
+              <p className="text-sm text-muted-foreground">Selecione um produto e clique em + para vinculá-lo à venda e baixar o estoque.</p>
             )}
 
             <div className="space-y-1.5 opacity-100 data-[disabled=true]:opacity-50" data-disabled={parcelado}>
